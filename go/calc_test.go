@@ -9,7 +9,21 @@ func TestAdd(t *testing.T) {
 }
 
 func TestDivide(t *testing.T) {
-	if got := Divide(8, 2); got != 4 {
+	got, err := Divide(8, 2)
+	if err != nil {
+		t.Fatalf("Divide(8, 2) unexpected error: %v", err)
+	}
+	if got != 4 {
 		t.Fatalf("Divide(8, 2) = %d, want 4", got)
+	}
+}
+
+func TestDivideByZero(t *testing.T) {
+	_, err := Divide(10, 0)
+	if err == nil {
+		t.Fatal("Divide(10, 0) expected error, got nil")
+	}
+	if err.Error() != "division by zero" {
+		t.Fatalf("Divide(10, 0) error = %q, want %q", err.Error(), "division by zero")
 	}
 }
