@@ -74,6 +74,50 @@ Expected JSON output:
 }
 ```
 
+### Python — CSV rolling window
+
+```bash
+python3 python/stats.py --file events.csv
+```
+
+Where `events.csv` contains:
+
+```csv
+timestamp,value
+2026-04-01T10:00:00Z,10
+2026-04-01T10:02:00Z,20
+2026-04-01T10:06:00Z,30
+```
+
+Expected JSON output:
+
+```json
+{
+  "windows": [
+    {
+      "window_start": "2026-04-01T10:00:00Z",
+      "window_end": "2026-04-01T10:05:00Z",
+      "summary": { "count": 2, "sum": 30.0, "min": 10.0, "max": 20.0, "average": 15.0, "median": 15.0 }
+    },
+    {
+      "window_start": "2026-04-01T10:05:00Z",
+      "window_end": "2026-04-01T10:10:00Z",
+      "summary": { "count": 1, "sum": 30.0, "min": 30.0, "max": 30.0, "average": 30.0, "median": 30.0 }
+    }
+  ]
+}
+```
+
+### Go — HTTP endpoint
+
+```bash
+cd go && go run ./cmd/server
+# In another terminal:
+curl -F "file=@events.csv" http://localhost:8080/api/window-summary
+```
+
+Expected: JSON output matching the same window schema as the Python CLI.
+
 ### TypeScript — spot-check examples
 
 | Expression | Expected output |
