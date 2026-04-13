@@ -23,10 +23,22 @@ This repository implements a small but realistic analytics toolkit across three 
 cd go && go test ./...
 ```
 
+### Go — run HTTP server
+
+```bash
+cd go && go run ./cmd/server
+```
+
+Upload a CSV file to get rolling 5-minute window summaries:
+
+```bash
+curl -F "file=@events.csv" http://localhost:8080/api/window-summary
+```
+
 ### Python — run tests
 
 ```bash
-python3 -m unittest discover -s python -p "test_*.py"
+cd python && python3 -m unittest discover -s . -p "test_*.py"
 ```
 
 ### Python — CLI demo
@@ -48,6 +60,35 @@ Output (JSON):
 }
 ```
 
+### Python — CSV rolling window
+
+```bash
+python3 python/stats.py --file events.csv
+```
+
+Output (JSON):
+
+```json
+{
+  "windows": [
+    {
+      "window_start": "2026-04-01T10:00:00Z",
+      "window_end": "2026-04-01T10:05:00Z",
+      "summary": {
+        "count": 2,
+        "sum": 30.0,
+        "min": 10.0,
+        "max": 20.0,
+        "average": 15.0,
+        "median": 15.0
+      }
+    }
+  ]
+}
+```
+
+> **Note:** `--values` and `--file` are mutually exclusive.
+
 ### TypeScript — function reference
 
 | Function | Description | Example |
@@ -68,6 +109,9 @@ Output (JSON):
 - `Median(values []float64) float64`
 - `PercentChange(prev, current float64) (float64, error)`
 - `BuildSummary(values []float64) Summary`
+- `ParseCSV(r io.Reader) ([]Event, []error)` — parse `timestamp,value` CSV
+- `BuildWindowSummaries(events []Event) []WindowSummary` — fixed 5-min window aggregation
+- `HandleWindowSummary(w, r)` — HTTP handler (POST multipart form with `file` field)
 
 ### Python (`stats`)
 
@@ -75,3 +119,28 @@ Output (JSON):
 - `median(values)` → `float`
 - `percent_change(prev, current)` → `float`
 - `build_summary(values)` → `dict`
+- `parse_csv(filepath)` → `list[tuple[datetime, float]]`
+- `build_window_summaries(events)` → `list[dict]`
+
+## CSV input format
+
+```csv
+timestamp,value
+2026-04-01T10:00:00Z,10
+2026-04-01T10:02:00Z,20
+2026-04-01T10:06:00Z,30
+```
+
+- `timestamp`: RFC 3339 format (UTC recommended)
+- `value`: floating-point number
+
+## Rolling window design
+
+| Aspect | Rule |
+|--------|------|
+| Window type | Fixed 5-minute time buckets (not sliding) |
+| Boundary | `[start, end)` — an event at exactly `10:05:00` belongs to the `10:05–10:10` bucket |
+| Out-of-order input | Sorted by timestamp before grouping |
+| Empty windows | Not emitted — only windows containing events appear in output |
+| Invalid rows | Skipped with warnings; valid rows are still processed |
+| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median` |
