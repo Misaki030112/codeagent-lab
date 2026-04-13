@@ -29,8 +29,12 @@ type WindowSummary struct {
 
 // WindowResult is the top-level JSON response containing all windows.
 type WindowResult struct {
-	Windows []WindowSummary `json:"windows"`
+	Windows  []WindowSummary `json:"windows"`
+	Warnings []string        `json:"warnings,omitempty"`
 }
+
+// maxUploadSize is the maximum allowed request body size for CSV uploads (10 MB).
+const maxUploadSize = 10 << 20
 
 // ParseCSV reads timestamp,value rows from a CSV reader.
 // It expects a header row with columns "timestamp" and "value".
@@ -90,21 +94,14 @@ func windowStart(t time.Time) time.Time {
 
 // BuildWindowSummaries groups events into fixed 5-minute windows using
 // [start, end) semantics and computes a Summary for each window.
-// Events are sorted by timestamp before grouping. Out-of-order input
-// is handled gracefully. Empty windows (no events) are not emitted.
+// Out-of-order input is handled gracefully. Empty windows are not emitted.
 func BuildWindowSummaries(events []Event) []WindowSummary {
 	if len(events) == 0 {
 		return nil
 	}
 
-	sorted := make([]Event, len(events))
-	copy(sorted, events)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
-	})
-
 	buckets := make(map[time.Time][]float64)
-	for _, e := range sorted {
+	for _, e := range events {
 		ws := windowStart(e.Timestamp)
 		buckets[ws] = append(buckets[ws], e.Value)
 	}
@@ -138,6 +135,8 @@ func HandleWindowSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, maxUploadSize)
+
 	file, _, err := r.FormFile("file")
 	if err != nil {
 		writeJSONError(w, http.StatusBadRequest, fmt.Sprintf("failed to read uploaded file: %v", err))
@@ -156,10 +155,15 @@ func HandleWindowSummary(w http.ResponseWriter, r *http.Request) {
 		windows = []WindowSummary{}
 	}
 
+	var warnings []string
+	for _, e := range parseErrs {
+		warnings = append(warnings, e.Error())
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(WindowResult{Windows: windows})
+	enc.Encode(WindowResult{Windows: windows, Warnings: warnings})
 }
 
 func writeJSONError(w http.ResponseWriter, code int, message string) {

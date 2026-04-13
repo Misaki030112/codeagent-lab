@@ -32,7 +32,7 @@ def average(values: Iterable[float]) -> float:
 
 def median(values: Iterable[float]) -> float:
     """Return the median. Returns 0 for empty input."""
-    items = sorted(list(values))
+    items = sorted(values)
     n = len(items)
     if n == 0:
         return 0
@@ -119,6 +119,9 @@ def parse_csv(filepath: str) -> list[tuple[datetime, float]]:
             except ValueError:
                 print(f"Warning: line {line_num}: invalid timestamp {row[0]!r}", file=sys.stderr)
                 continue
+            if ts.tzinfo is None:
+                print(f"Warning: line {line_num}: timestamp {row[0]!r} has no timezone offset", file=sys.stderr)
+                continue
             try:
                 val = float(row[1])
             except ValueError:
@@ -134,16 +137,14 @@ def build_window_summaries(
 ) -> list[dict]:
     """Group events into fixed 5-minute windows and compute summaries.
 
-    Uses [start, end) semantics. Events are sorted by timestamp.
+    Uses [start, end) semantics. Out-of-order input is handled gracefully.
     Empty windows are not emitted.
     """
     if not events:
         return []
 
-    sorted_events = sorted(events, key=lambda e: e[0])
-
     buckets: dict[datetime, list[float]] = {}
-    for ts, val in sorted_events:
+    for ts, val in events:
         ws = _window_start(ts)
         buckets.setdefault(ws, []).append(val)
 

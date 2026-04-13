@@ -190,47 +190,42 @@ func TestBuildWindowSummariesBoundaryPoint(t *testing.T) {
 
 // --- HTTP Handler ---
 
-func TestHandleWindowSummarySuccess(t *testing.T) {
-	csvData := "timestamp,value\n2026-04-01T10:00:00Z,10\n2026-04-01T10:02:00Z,20\n"
+func postCSV(t *testing.T, csvData string) *httptest.ResponseRecorder {
+	t.Helper()
 	body, contentType := createMultipartForm(t, "file", "data.csv", csvData)
-
 	req := httptest.NewRequest(http.MethodPost, "/api/window-summary", body)
 	req.Header.Set("Content-Type", contentType)
 	rr := httptest.NewRecorder()
-
 	HandleWindowSummary(rr, req)
+	return rr
+}
 
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
-	}
-
+func decodeWindowResult(t *testing.T, rr *httptest.ResponseRecorder) WindowResult {
+	t.Helper()
 	var result WindowResult
 	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
+	return result
+}
+
+func TestHandleWindowSummarySuccess(t *testing.T) {
+	rr := postCSV(t, "timestamp,value\n2026-04-01T10:00:00Z,10\n2026-04-01T10:02:00Z,20\n")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	result := decodeWindowResult(t, rr)
 	if len(result.Windows) != 1 {
 		t.Fatalf("expected 1 window, got %d", len(result.Windows))
 	}
 }
 
 func TestHandleWindowSummaryEmptyCSV(t *testing.T) {
-	csvData := "timestamp,value\n"
-	body, contentType := createMultipartForm(t, "file", "data.csv", csvData)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/window-summary", body)
-	req.Header.Set("Content-Type", contentType)
-	rr := httptest.NewRecorder()
-
-	HandleWindowSummary(rr, req)
-
+	rr := postCSV(t, "timestamp,value\n")
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-
-	var result WindowResult
-	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
-	}
+	result := decodeWindowResult(t, rr)
 	if len(result.Windows) != 0 {
 		t.Fatalf("expected 0 windows, got %d", len(result.Windows))
 	}
@@ -248,17 +243,26 @@ func TestHandleWindowSummaryMethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleWindowSummaryBadCSV(t *testing.T) {
-	csvData := "bad,header\n1,2\n"
-	body, contentType := createMultipartForm(t, "file", "data.csv", csvData)
-
-	req := httptest.NewRequest(http.MethodPost, "/api/window-summary", body)
-	req.Header.Set("Content-Type", contentType)
-	rr := httptest.NewRecorder()
-
-	HandleWindowSummary(rr, req)
-
+	rr := postCSV(t, "bad,header\n1,2\n")
 	if rr.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400, got %d: %s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestHandleWindowSummaryPartialErrors(t *testing.T) {
+	rr := postCSV(t, "timestamp,value\nnot-a-time,10\n2026-04-01T10:00:00Z,20\n")
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
+	}
+	result := decodeWindowResult(t, rr)
+	if len(result.Windows) != 1 {
+		t.Fatalf("expected 1 window, got %d", len(result.Windows))
+	}
+	if len(result.Warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(result.Warnings))
+	}
+	if !strings.Contains(result.Warnings[0], "invalid timestamp") {
+		t.Fatalf("expected warning about invalid timestamp, got %q", result.Warnings[0])
 	}
 }
 

@@ -17,13 +17,14 @@ from stats import (
 )
 
 
-def _write_csv(content: str) -> str:
-    """Write content to a temporary CSV file and return its path."""
+def _write_csv(test_case: unittest.TestCase, content: str) -> str:
+    """Write content to a temporary CSV file, register cleanup, and return its path."""
     f = tempfile.NamedTemporaryFile(
         mode="w", suffix=".csv", delete=False, newline=""
     )
     f.write(content)
     f.close()
+    test_case.addCleanup(os.unlink, f.name)
     return f.name
 
 
@@ -127,13 +128,9 @@ class TestBuildSummary(unittest.TestCase):
 
 
 class TestParseCSV(unittest.TestCase):
-    def _csv(self, content: str) -> str:
-        path = _write_csv(content)
-        self.addCleanup(os.unlink, path)
-        return path
-
     def test_normal(self):
-        path = self._csv(
+        path = _write_csv(
+            self,
             "timestamp,value\n2026-04-01T10:00:00+00:00,10\n2026-04-01T10:02:00+00:00,20\n"
         )
         events = parse_csv(path)
@@ -142,22 +139,23 @@ class TestParseCSV(unittest.TestCase):
         self.assertEqual(events[1][1], 20.0)
 
     def test_empty_file(self):
-        path = self._csv("")
+        path = _write_csv(self, "")
         with self.assertRaises(SystemExit):
             parse_csv(path)
 
     def test_invalid_header(self):
-        path = self._csv("time,val\n1,2\n")
+        path = _write_csv(self, "time,val\n1,2\n")
         with self.assertRaises(SystemExit):
             parse_csv(path)
 
     def test_header_only(self):
-        path = self._csv("timestamp,value\n")
+        path = _write_csv(self, "timestamp,value\n")
         events = parse_csv(path)
         self.assertEqual(len(events), 0)
 
     def test_invalid_timestamp_skipped(self):
-        path = self._csv(
+        path = _write_csv(
+            self,
             "timestamp,value\nnot-a-time,10\n2026-04-01T10:00:00+00:00,20\n"
         )
         events = parse_csv(path)
@@ -165,7 +163,8 @@ class TestParseCSV(unittest.TestCase):
         self.assertEqual(events[0][1], 20.0)
 
     def test_invalid_value_skipped(self):
-        path = self._csv(
+        path = _write_csv(
+            self,
             "timestamp,value\n2026-04-01T10:00:00+00:00,abc\n2026-04-01T10:01:00+00:00,5\n"
         )
         events = parse_csv(path)
@@ -175,6 +174,15 @@ class TestParseCSV(unittest.TestCase):
     def test_file_not_found(self):
         with self.assertRaises(SystemExit):
             parse_csv("/nonexistent/path.csv")
+
+    def test_naive_timestamp_skipped(self):
+        path = _write_csv(
+            self,
+            "timestamp,value\n2026-04-01T10:00:00,10\n2026-04-01T10:02:00+00:00,20\n"
+        )
+        events = parse_csv(path)
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0][1], 20.0)
 
 
 class TestBuildWindowSummaries(unittest.TestCase):
@@ -235,20 +243,15 @@ class TestBuildWindowSummaries(unittest.TestCase):
 
 
 class TestCLIFileMode(unittest.TestCase):
-    def _csv(self, content: str) -> str:
-        path = _write_csv(content)
-        self.addCleanup(os.unlink, path)
-        return path
-
-    def _stats_py(self):
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), "stats.py")
+    _stats_py_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "stats.py")
 
     def test_file_flag_produces_windows(self):
-        path = self._csv(
+        path = _write_csv(
+            self,
             "timestamp,value\n2026-04-01T10:00:00+00:00,10\n2026-04-01T10:02:00+00:00,20\n"
         )
         result = subprocess.run(
-            ["python3", self._stats_py(), "--file", path],
+            ["python3", self._stats_py_path, "--file", path],
             capture_output=True,
             text=True,
         )
@@ -259,7 +262,7 @@ class TestCLIFileMode(unittest.TestCase):
 
     def test_values_and_file_mutually_exclusive(self):
         result = subprocess.run(
-            ["python3", self._stats_py(), "--values", "1,2", "--file", "x.csv"],
+            ["python3", self._stats_py_path, "--values", "1,2", "--file", "x.csv"],
             capture_output=True,
             text=True,
         )
@@ -267,7 +270,7 @@ class TestCLIFileMode(unittest.TestCase):
 
     def test_values_still_works(self):
         result = subprocess.run(
-            ["python3", self._stats_py(), "--values", "1,2,3"],
+            ["python3", self._stats_py_path, "--values", "1,2,3"],
             capture_output=True,
             text=True,
         )
