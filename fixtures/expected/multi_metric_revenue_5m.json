@@ -1,0 +1,67 @@
+{
+  "generated_at": "",
+  "metric": "revenue",
+  "dimension": "",
+  "window_size": "5m",
+  "current_windows": [
+    {
+      "window_start": "2026-04-01T10:00:00Z",
+      "window_end": "2026-04-01T10:05:00Z",
+      "summary": {
+        "count": 3,
+        "sum": 296.0,
+        "min": 80.0,
+        "max": 120.5,
+        "average": 98.6667,
+        "median": 95.5,
+        "variance": 274.0556,
+        "std_dev": 16.5546,
+        "p90": 115.5,
+        "p95": 118.0,
+        "first": 120.5,
+        "last": 95.5,
+        "delta": -25.0,
+        "percent_change": -20.7469
+      }
+    },
+    {
+      "window_start": "2026-04-01T10:05:00Z",
+      "window_end": "2026-04-01T10:10:00Z",
+      "summary": {
+        "count": 2,
+        "sum": 350.0,
+        "min": 150.0,
+        "max": 200.0,
+        "average": 175.0,
+        "median": 175.0,
+        "variance": 625.0,
+        "std_dev": 25.0,
+        "p90": 195.0,
+        "p95": 197.5,
+        "first": 200.0,
+        "last": 150.0,
+        "delta": -50.0,
+        "percent_change": -25.0
+      }
+    }
+  ],
+  "previous_windows": [],
+  "overall_summary": {
+    "count": 5,
+    "sum": 646.0,
+    "min": 80.0,
+    "max": 200.0,
+    "average": 129.2,
+    "median": 120.5,
+    "variance": 2117.36,
+    "std_dev": 46.0148,
+    "p90": 190.0,
+    "p95": 195.0,
+    "first": 120.5,
+    "last": 150.0,
+    "delta": 29.5,
+    "percent_change": 24.4813
+  },
+  "trend": "up",
+  "alerts": []
+}

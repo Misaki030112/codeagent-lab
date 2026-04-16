@@ -90,7 +90,127 @@ func TestParseCSVMissingColumns(t *testing.T) {
 	}
 }
 
-// --- BuildWindowSummaries ---
+// --- ParseMultiCSV ---
+
+func TestParseMultiCSVNormal(t *testing.T) {
+	input := "timestamp,metric,value,dimension,source\n2026-04-01T10:00:00Z,revenue,120.5,cn,ads\n2026-04-01T10:01:00Z,latency_ms,240.0,us,api\n"
+	events, warnings := ParseMultiCSV(strings.NewReader(input))
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if len(events) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(events))
+	}
+	if events[0].Metric != "revenue" || events[0].Value != 120.5 || events[0].Dimension != "cn" || events[0].Source != "ads" {
+		t.Fatalf("unexpected event[0]: %+v", events[0])
+	}
+	if events[1].Metric != "latency_ms" || events[1].Value != 240.0 {
+		t.Fatalf("unexpected event[1]: %+v", events[1])
+	}
+}
+
+func TestParseMultiCSVEmptyMetric(t *testing.T) {
+	input := "timestamp,metric,value,dimension,source\n2026-04-01T10:00:00Z,,120.5,cn,ads\n"
+	events, warnings := ParseMultiCSV(strings.NewReader(input))
+	if len(events) != 0 {
+		t.Fatalf("expected 0 events, got %d", len(events))
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0].Message, "empty metric") {
+		t.Fatalf("expected empty metric warning, got %v", warnings)
+	}
+}
+
+func TestParseMultiCSVInvalidValue(t *testing.T) {
+	input := "timestamp,metric,value,dimension,source\n2026-04-01T10:00:00Z,revenue,not_a_number,cn,ads\n2026-04-01T10:01:00Z,revenue,100.0,us,ads\n"
+	events, warnings := ParseMultiCSV(strings.NewReader(input))
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if len(warnings) != 1 {
+		t.Fatalf("expected 1 warning, got %d", len(warnings))
+	}
+}
+
+func TestParseMultiCSVOptionalColumns(t *testing.T) {
+	input := "timestamp,metric,value\n2026-04-01T10:00:00Z,revenue,120.5\n"
+	events, warnings := ParseMultiCSV(strings.NewReader(input))
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %v", warnings)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 event, got %d", len(events))
+	}
+	if events[0].Dimension != "" || events[0].Source != "" {
+		t.Fatalf("expected empty dimension/source, got %+v", events[0])
+	}
+}
+
+// --- FilterEvents ---
+
+func TestFilterEventsByMetric(t *testing.T) {
+	events := []MultiEvent{
+		{Metric: "revenue", Value: 100, Dimension: "cn"},
+		{Metric: "latency_ms", Value: 200, Dimension: "us"},
+		{Metric: "revenue", Value: 300, Dimension: "us"},
+	}
+	filtered := FilterEvents(events, "revenue", "")
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(filtered))
+	}
+}
+
+func TestFilterEventsByMetricAndDimension(t *testing.T) {
+	events := []MultiEvent{
+		{Metric: "revenue", Value: 100, Dimension: "cn"},
+		{Metric: "revenue", Value: 200, Dimension: "us"},
+		{Metric: "revenue", Value: 300, Dimension: "cn"},
+	}
+	filtered := FilterEvents(events, "revenue", "cn")
+	if len(filtered) != 2 {
+		t.Fatalf("expected 2 events, got %d", len(filtered))
+	}
+}
+
+// --- ParseWindowSize ---
+
+func TestParseWindowSizeDefault(t *testing.T) {
+	d, err := ParseWindowSize("")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d != DefaultWindowSize {
+		t.Fatalf("expected %v, got %v", DefaultWindowSize, d)
+	}
+}
+
+func TestParseWindowSizeMinutes(t *testing.T) {
+	d, err := ParseWindowSize("15m")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d != 15*time.Minute {
+		t.Fatalf("expected 15m, got %v", d)
+	}
+}
+
+func TestParseWindowSizeHours(t *testing.T) {
+	d, err := ParseWindowSize("1h")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if d != time.Hour {
+		t.Fatalf("expected 1h, got %v", d)
+	}
+}
+
+func TestParseWindowSizeInvalid(t *testing.T) {
+	_, err := ParseWindowSize("abc")
+	if err == nil {
+		t.Fatal("expected error for invalid window size")
+	}
+}
+
+// --- BuildWindowSummaries (legacy) ---
 
 func TestBuildWindowSummariesEmpty(t *testing.T) {
 	result := BuildWindowSummaries(nil)
@@ -171,7 +291,6 @@ func TestBuildWindowSummariesOutOfOrder(t *testing.T) {
 }
 
 func TestBuildWindowSummariesBoundaryPoint(t *testing.T) {
-	// An event exactly at a window boundary belongs to the new window.
 	events := []Event{
 		{Timestamp: mustParseTime("2026-04-01T10:04:59Z"), Value: 1},
 		{Timestamp: mustParseTime("2026-04-01T10:05:00Z"), Value: 2},
@@ -188,6 +307,53 @@ func TestBuildWindowSummariesBoundaryPoint(t *testing.T) {
 	}
 }
 
+// --- BuildMultiWindowSummaries ---
+
+func TestBuildMultiWindowSummariesBasic(t *testing.T) {
+	events := []MultiEvent{
+		{Timestamp: mustParseTime("2026-04-01T10:00:00Z"), Metric: "revenue", Value: 100},
+		{Timestamp: mustParseTime("2026-04-01T10:02:00Z"), Metric: "revenue", Value: 200},
+		{Timestamp: mustParseTime("2026-04-01T10:06:00Z"), Metric: "revenue", Value: 300},
+	}
+	windows := BuildMultiWindowSummaries(events, 5*time.Minute, false)
+	if len(windows) != 2 {
+		t.Fatalf("expected 2 windows, got %d", len(windows))
+	}
+	if windows[0].Summary.Count != 2 {
+		t.Fatalf("window 0: expected count 2, got %d", windows[0].Summary.Count)
+	}
+	if windows[1].Summary.Count != 1 {
+		t.Fatalf("window 1: expected count 1, got %d", windows[1].Summary.Count)
+	}
+}
+
+func TestBuildMultiWindowSummariesFillEmpty(t *testing.T) {
+	events := []MultiEvent{
+		{Timestamp: mustParseTime("2026-04-01T10:00:00Z"), Metric: "revenue", Value: 100},
+		{Timestamp: mustParseTime("2026-04-01T10:12:00Z"), Metric: "revenue", Value: 200},
+	}
+	windows := BuildMultiWindowSummaries(events, 5*time.Minute, true)
+	if len(windows) != 3 {
+		t.Fatalf("expected 3 windows (with empty fill), got %d", len(windows))
+	}
+	// Middle window should be empty
+	if windows[1].Summary.Count != 0 {
+		t.Fatalf("middle window: expected count 0, got %d", windows[1].Summary.Count)
+	}
+}
+
+func TestBuildMultiWindowSummariesCustomSize(t *testing.T) {
+	events := []MultiEvent{
+		{Timestamp: mustParseTime("2026-04-01T10:00:00Z"), Metric: "revenue", Value: 100},
+		{Timestamp: mustParseTime("2026-04-01T10:14:00Z"), Metric: "revenue", Value: 200},
+		{Timestamp: mustParseTime("2026-04-01T10:16:00Z"), Metric: "revenue", Value: 300},
+	}
+	windows := BuildMultiWindowSummaries(events, 15*time.Minute, false)
+	if len(windows) != 2 {
+		t.Fatalf("expected 2 windows with 15m size, got %d", len(windows))
+	}
+}
+
 // --- HTTP Handler ---
 
 func postCSV(t *testing.T, csvData string) *httptest.ResponseRecorder {
@@ -200,11 +366,17 @@ func postCSV(t *testing.T, csvData string) *httptest.ResponseRecorder {
 	return rr
 }
 
-func decodeWindowResult(t *testing.T, rr *httptest.ResponseRecorder) WindowResult {
+// legacyWindowResult mirrors the inline struct used by HandleWindowSummary for backward compatibility.
+type legacyWindowResult struct {
+	Windows  []WindowSummary `json:"windows"`
+	Warnings []string        `json:"warnings,omitempty"`
+}
+
+func decodeLegacyWindowResult(t *testing.T, rr *httptest.ResponseRecorder) legacyWindowResult {
 	t.Helper()
-	var result WindowResult
+	var result legacyWindowResult
 	if err := json.Unmarshal(rr.Body.Bytes(), &result); err != nil {
-		t.Fatalf("failed to parse JSON: %v", err)
+		t.Fatalf("failed to parse JSON: %v\nbody: %s", err, rr.Body.String())
 	}
 	return result
 }
@@ -214,7 +386,7 @@ func TestHandleWindowSummarySuccess(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	result := decodeWindowResult(t, rr)
+	result := decodeLegacyWindowResult(t, rr)
 	if len(result.Windows) != 1 {
 		t.Fatalf("expected 1 window, got %d", len(result.Windows))
 	}
@@ -225,7 +397,7 @@ func TestHandleWindowSummaryEmptyCSV(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	result := decodeWindowResult(t, rr)
+	result := decodeLegacyWindowResult(t, rr)
 	if len(result.Windows) != 0 {
 		t.Fatalf("expected 0 windows, got %d", len(result.Windows))
 	}
@@ -254,7 +426,7 @@ func TestHandleWindowSummaryPartialErrors(t *testing.T) {
 	if rr.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rr.Code, rr.Body.String())
 	}
-	result := decodeWindowResult(t, rr)
+	result := decodeLegacyWindowResult(t, rr)
 	if len(result.Windows) != 1 {
 		t.Fatalf("expected 1 window, got %d", len(result.Windows))
 	}
