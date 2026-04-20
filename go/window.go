@@ -206,11 +206,6 @@ func windowStartFor(t time.Time, ws time.Duration) time.Time {
 	return time.Unix(bucketStart, 0).UTC()
 }
 
-// windowStart returns the start of the 5-minute bucket containing t (legacy).
-func windowStart(t time.Time) time.Time {
-	return t.UTC().Truncate(WindowSize)
-}
-
 // BuildWindowSummaries groups events into fixed 5-minute windows using
 // [start, end) semantics and computes a Summary for each window.
 // Out-of-order input is handled gracefully. Empty windows are not emitted.
@@ -221,7 +216,7 @@ func BuildWindowSummaries(events []Event) []WindowSummary {
 
 	buckets := make(map[time.Time][]float64)
 	for _, e := range events {
-		ws := windowStart(e.Timestamp)
+		ws := windowStartFor(e.Timestamp, WindowSize)
 		buckets[ws] = append(buckets[ws], e.Value)
 	}
 
@@ -359,12 +354,6 @@ func HandleWindowSummary(w http.ResponseWriter, r *http.Request) {
 func writeJSONError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	json.NewEncoder(w).Encode(APIError{Error: "bad_request", Message: message})
-}
-
-func encodeJSON(w http.ResponseWriter, v interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	enc.Encode(v)
+	// Legacy error format: single "error" field for backward compatibility.
+	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

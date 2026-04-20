@@ -104,5 +104,4 @@ type QueryParams struct {
 	Dimension        string
 	WindowSize       time.Duration
 	FillEmptyWindows bool
-	GroupBy          string // "" | "metric" | "metric+dimension"
 }

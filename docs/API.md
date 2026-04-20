@@ -6,6 +6,16 @@
 http://localhost:8080
 ```
 
+## Limits
+
+| Limit | Value |
+|-------|-------|
+| Max upload size | 10 MB |
+| Read header timeout | 10 s |
+| Read timeout | 30 s |
+| Write timeout | 60 s |
+| Idle timeout | 120 s |
+
 ## Endpoints
 
 ### POST /api/summary
@@ -158,7 +168,7 @@ Warnings from CSV parsing are returned as structured objects:
 }
 ```
 
-Note: The legacy `/api/window-summary` endpoint returns warnings as plain strings for backward compatibility.
+Note: The legacy `/api/window-summary` endpoint returns warnings as plain strings and errors as `{"error": "..."}` (single-field format) for backward compatibility.
 
 ## Summary Fields
 

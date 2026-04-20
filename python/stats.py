@@ -26,6 +26,12 @@ from typing import Iterable
 DEFAULT_WINDOW_SIZE = timedelta(seconds=300)  # 5 minutes
 WINDOW_SIZE = DEFAULT_WINDOW_SIZE  # backward compat
 
+# Thresholds for trend detection and anomaly alerting.
+TREND_THRESHOLD_PCT = 5.0
+SPIKE_MULTIPLIER = 2.0
+DROP_MULTIPLIER = 0.5
+VARIANCE_MULTIPLIER = 2.0
+
 
 # ---------------------------------------------------------------------------
 # Core statistics functions
@@ -356,11 +362,9 @@ def build_multi_window_summaries(
     sorted_events = sorted(events, key=lambda e: e["timestamp"])
 
     buckets: dict[datetime, list[float]] = {}
-    ordered_buckets: dict[datetime, list[float]] = {}
     for e in sorted_events:
         start = _window_start_for(e["timestamp"], ws)
         buckets.setdefault(start, []).append(e["value"])
-        ordered_buckets.setdefault(start, []).append(e["value"])
 
     starts = sorted(buckets.keys())
 
@@ -373,18 +377,16 @@ def build_multi_window_summaries(
             all_starts.append(t)
             if t not in buckets:
                 buckets[t] = []
-                ordered_buckets[t] = []
             t += ws
         starts = all_starts
 
     result = []
     for s in starts:
         vals = buckets[s]
-        ordered = ordered_buckets[s]
         result.append({
             "window_start": s.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "window_end": (s + ws).strftime("%Y-%m-%dT%H:%M:%SZ"),
-            "summary": build_summary_ordered(vals, ordered),
+            "summary": build_summary_ordered(vals, vals),
         })
     return result
 
@@ -409,9 +411,9 @@ def compute_trend(windows: list[dict]) -> str:
     else:
         return "up" if last_avg > 0 else "down"
 
-    if pct > 5:
+    if pct > TREND_THRESHOLD_PCT:
         return "up"
-    if pct < -5:
+    if pct < -TREND_THRESHOLD_PCT:
         return "down"
     return "flat"
 
@@ -441,31 +443,35 @@ def detect_alerts(windows: list[dict]) -> list[dict]:
         w_avg = w["summary"]["average"]
         w_std = w["summary"]["std_dev"]
 
-        if overall_avg > 0 and w_avg > overall_avg * 2:
+        spike_threshold = overall_avg * SPIKE_MULTIPLIER
+        drop_threshold = overall_avg * DROP_MULTIPLIER
+        var_threshold = overall_std * VARIANCE_MULTIPLIER
+
+        if overall_avg > 0 and w_avg > spike_threshold:
             alerts.append({
                 "type": "spike",
                 "window_start": w["window_start"],
                 "message": "window average is more than 2x the overall average",
                 "value": w_avg,
-                "threshold": overall_avg * 2,
+                "threshold": spike_threshold,
             })
 
-        if overall_avg > 0 and w_avg < overall_avg * 0.5:
+        if overall_avg > 0 and w_avg < drop_threshold:
             alerts.append({
                 "type": "drop",
                 "window_start": w["window_start"],
                 "message": "window average is less than 0.5x the overall average",
                 "value": w_avg,
-                "threshold": overall_avg * 0.5,
+                "threshold": drop_threshold,
             })
 
-        if overall_std > 0 and w_std > overall_std * 2:
+        if overall_std > 0 and w_std > var_threshold:
             alerts.append({
                 "type": "high_variance",
                 "window_start": w["window_start"],
                 "message": "window standard deviation is more than 2x the overall",
                 "value": w_std,
-                "threshold": overall_std * 2,
+                "threshold": var_threshold,
             })
 
     return alerts
@@ -542,6 +548,15 @@ def parse_window_size(s: str) -> timedelta:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _parse_values_arg(raw: str) -> list[float]:
+    """Parse a comma-separated string of numbers into a list of floats."""
+    try:
+        return [float(v.strip()) for v in raw.split(",") if v.strip()]
+    except ValueError as exc:
+        print(f"Error parsing values: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Analytics summary CLI")
     subparsers = parser.add_subparsers(dest="command")
@@ -569,7 +584,6 @@ def main() -> None:
     rpt_parser.add_argument("--dimension", default="", help="Dimension to filter by")
     rpt_parser.add_argument("--window-size", default="5m", help="Window size (e.g. 1m, 5m, 15m, 1h)")
     rpt_parser.add_argument("--fill-empty-windows", action="store_true", help="Fill empty windows")
-    rpt_parser.add_argument("--group-by", default="", help="Group by: metric, metric+dimension")
 
     # Legacy: support old --values/--file style without subcommand
     parser.add_argument("--values", help=argparse.SUPPRESS)
@@ -580,12 +594,7 @@ def main() -> None:
     # Handle legacy mode (no subcommand)
     if args.command is None:
         if getattr(args, "values", None) is not None:
-            try:
-                nums = [float(v.strip()) for v in args.values.split(",") if v.strip()]
-            except ValueError as exc:
-                print(f"Error parsing values: {exc}", file=sys.stderr)
-                sys.exit(1)
-            result = build_summary(nums)
+            result = build_summary(_parse_values_arg(args.values))
             print(json.dumps(result, indent=2))
             return
         elif getattr(args, "file", None) is not None:
@@ -600,12 +609,7 @@ def main() -> None:
 
     if args.command == "summary":
         if args.values is not None:
-            try:
-                nums = [float(v.strip()) for v in args.values.split(",") if v.strip()]
-            except ValueError as exc:
-                print(f"Error parsing values: {exc}", file=sys.stderr)
-                sys.exit(1)
-            result = build_summary(nums)
+            result = build_summary(_parse_values_arg(args.values))
             print(json.dumps(result, indent=2))
         else:
             events, warnings = parse_multi_csv(args.file)

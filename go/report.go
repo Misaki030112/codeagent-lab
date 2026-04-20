@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+// Thresholds for trend detection and anomaly alerting.
+const (
+	// trendThresholdPct is the minimum percent change to classify as up/down trend.
+	trendThresholdPct = 5.0
+	// spikeMultiplier defines the ratio above overall average that triggers a spike alert.
+	spikeMultiplier = 2.0
+	// dropMultiplier defines the ratio below overall average that triggers a drop alert.
+	dropMultiplier = 0.5
+	// varianceMultiplier defines the ratio above overall std_dev that triggers a high-variance alert.
+	varianceMultiplier = 2.0
+)
+
 // BuildReport generates a full analytics report for filtered events.
 func BuildReport(events []MultiEvent, metric, dimension string, ws time.Duration, fillEmpty bool) Report {
 	filtered := FilterEvents(events, metric, dimension)
@@ -66,10 +78,10 @@ func computeTrend(windows []WindowSummary) Trend {
 		return TrendDown
 	}
 
-	if pctChange > 5 {
+	if pctChange > trendThresholdPct {
 		return TrendUp
 	}
-	if pctChange < -5 {
+	if pctChange < -trendThresholdPct {
 		return TrendDown
 	}
 	return TrendFlat
@@ -104,36 +116,37 @@ func detectAlerts(windows []WindowSummary) []Alert {
 			continue
 		}
 
-		// Spike detection
-		if overallAvg > 0 && w.Summary.Average > overallAvg*2 {
+		spikeThreshold := overallAvg * spikeMultiplier
+		dropThreshold := overallAvg * dropMultiplier
+		varThreshold := overallStdDev * varianceMultiplier
+
+		if overallAvg > 0 && w.Summary.Average > spikeThreshold {
 			alerts = append(alerts, Alert{
 				Type:        AlertSpike,
 				WindowStart: w.WindowStart,
 				Message:     "window average is more than 2x the overall average",
 				Value:       w.Summary.Average,
-				Threshold:   overallAvg * 2,
+				Threshold:   spikeThreshold,
 			})
 		}
 
-		// Drop detection
-		if overallAvg > 0 && w.Summary.Average < overallAvg*0.5 {
+		if overallAvg > 0 && w.Summary.Average < dropThreshold {
 			alerts = append(alerts, Alert{
 				Type:        AlertDrop,
 				WindowStart: w.WindowStart,
 				Message:     "window average is less than 0.5x the overall average",
 				Value:       w.Summary.Average,
-				Threshold:   overallAvg * 0.5,
+				Threshold:   dropThreshold,
 			})
 		}
 
-		// High variance detection
-		if overallStdDev > 0 && w.Summary.StdDev > overallStdDev*2 {
+		if overallStdDev > 0 && w.Summary.StdDev > varThreshold {
 			alerts = append(alerts, Alert{
 				Type:        AlertHighVariance,
 				WindowStart: w.WindowStart,
 				Message:     "window standard deviation is more than 2x the overall",
 				Value:       w.Summary.StdDev,
-				Threshold:   overallStdDev * 2,
+				Threshold:   varThreshold,
 			})
 		}
 	}

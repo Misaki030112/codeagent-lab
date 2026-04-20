@@ -47,6 +47,10 @@ export function trendLabel(trend: Trend): string {
       return "Flat";
     case "insufficient_data":
       return "Insufficient Data";
+    default: {
+      const _exhaustive: never = trend;
+      return String(_exhaustive);
+    }
   }
 }
 
@@ -68,6 +72,10 @@ export function alertLabel(alertType: AlertType): string {
       return "Drop Detected";
     case "high_variance":
       return "High Variance";
+    default: {
+      const _exhaustive: never = alertType;
+      return String(_exhaustive);
+    }
   }
 }
 

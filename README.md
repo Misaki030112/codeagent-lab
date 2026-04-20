@@ -152,11 +152,11 @@ The report endpoint returns a higher-level analytics report:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `POST /api/summary` | POST | Upload multi-metric CSV, return filtered summary |
-| `POST /api/window-summary` | POST | Upload CSV, return legacy window summaries |
-| `POST /api/report` | POST | Upload CSV, return full analytics report |
-| `GET /healthz` | GET | Health check |
-| `GET /api/meta` | GET | API version and metadata |
+| `/api/summary` | POST | Upload multi-metric CSV, return filtered summary |
+| `/api/window-summary` | POST | Upload legacy CSV, return per-window summaries |
+| `/api/report` | POST | Upload multi-metric CSV, return full analytics report |
+| `/healthz` | GET | Health check |
+| `/api/meta` | GET | API version and metadata |
 
 ### Query Parameters (form fields)
 
@@ -178,7 +178,7 @@ curl -F "file=@fixtures/events/basic.csv" \
 
 ### Error Responses
 
-All errors use a unified JSON structure:
+All new endpoints use a unified JSON error structure:
 
 ```json
 {
@@ -186,6 +186,10 @@ All errors use a unified JSON structure:
   "message": "CSV parsing failed"
 }
 ```
+
+The legacy `/api/window-summary` endpoint preserves the original error format: `{"error": "..."}`.
+
+**Upload limit:** 10 MB per request.
 
 ## Python CLI
 

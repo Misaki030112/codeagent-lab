@@ -4,6 +4,7 @@
  */
 
 import type { Report, Summary, WindowSummary, Alert } from "./types";
+import { formatSummaryField } from "./format";
 
 /** A row in a summary table. */
 export interface SummaryTableRow {
@@ -52,20 +53,7 @@ const SUMMARY_FIELD_LABELS: Array<{ key: keyof Summary; label: string }> = [
 export function summaryToTableRows(summary: Summary): SummaryTableRow[] {
   return SUMMARY_FIELD_LABELS.map(({ key, label }) => {
     const raw = summary[key];
-    let value: string;
-    if (raw === null || raw === undefined) {
-      value = "—";
-    } else if (key === "count") {
-      value = raw.toString();
-    } else if (key === "percent_change") {
-      const sign = (raw as number) > 0 ? "+" : "";
-      value = `${sign}${(raw as number).toFixed(1)}%`;
-    } else if (key === "delta") {
-      const sign = (raw as number) > 0 ? "+" : "";
-      value = `${sign}${(raw as number).toFixed(2)}`;
-    } else {
-      value = (raw as number).toFixed(2);
-    }
+    const value = formatSummaryField(key, raw as number | null);
     return { label, value, key, raw: raw as number | null };
   });
 }

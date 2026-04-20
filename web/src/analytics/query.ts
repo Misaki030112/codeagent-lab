@@ -11,13 +11,13 @@ const DEFAULT_BASE_URL = "http://localhost:8080";
  * Build a URL search string from query params.
  */
 export function buildQueryString(params: QueryParams): string {
-  const parts: string[] = [];
-  if (params.metric) parts.push(`metric=${encodeURIComponent(params.metric)}`);
-  if (params.dimension) parts.push(`dimension=${encodeURIComponent(params.dimension)}`);
-  if (params.window_size) parts.push(`window_size=${encodeURIComponent(params.window_size)}`);
-  if (params.fill_empty_windows) parts.push("fill_empty_windows=true");
-  if (params.group_by) parts.push(`group_by=${encodeURIComponent(params.group_by)}`);
-  return parts.join("&");
+  const sp = new URLSearchParams();
+  if (params.metric) sp.set("metric", params.metric);
+  if (params.dimension) sp.set("dimension", params.dimension);
+  if (params.window_size) sp.set("window_size", params.window_size);
+  if (params.fill_empty_windows) sp.set("fill_empty_windows", "true");
+  if (params.group_by) sp.set("group_by", params.group_by);
+  return sp.toString();
 }
 
 /**
