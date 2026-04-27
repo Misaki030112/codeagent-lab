@@ -1,0 +1,10 @@
+timestamp,metric,value,dimension,source
+2026-04-01T10:00:00Z,revenue,120.5,cn,ads
+2026-04-01T10:01:00Z,revenue,80.0,us,organic
+2026-04-01T10:02:00Z,latency_ms,240.0,cn,api
+2026-04-01T10:03:00Z,latency_ms,180.0,us,api
+2026-04-01T10:04:00Z,revenue,95.5,cn,ads
+2026-04-01T10:06:00Z,revenue,200.0,cn,organic
+2026-04-01T10:07:00Z,latency_ms,320.0,cn,api
+2026-04-01T10:08:00Z,latency_ms,150.0,us,api
+2026-04-01T10:09:00Z,revenue,150.0,us,ads

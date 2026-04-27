@@ -1,0 +1,7 @@
+timestamp,metric,value,dimension,source
+2026-04-01T10:00:00Z,revenue,120.5,cn,ads
+2026-04-01T10:01:00Z,revenue,80.0,us,organic
+2026-04-01T10:02:00Z,revenue,95.5,cn,ads
+2026-04-01T10:03:00Z,revenue,110.0,us,ads
+2026-04-01T10:06:00Z,revenue,200.0,cn,organic
+2026-04-01T10:07:00Z,revenue,150.0,us,ads

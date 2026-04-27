@@ -8,35 +8,60 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 )
 
-// WindowSize is the fixed duration for each aggregation bucket.
-const WindowSize = 5 * time.Minute
+// DefaultWindowSize is the default duration for each aggregation bucket.
+const DefaultWindowSize = 5 * time.Minute
 
-// Event represents a single timestamped numeric observation.
+// WindowSize is kept for backward compatibility.
+const WindowSize = DefaultWindowSize
+
+// maxUploadSize is the maximum allowed request body size for CSV uploads (10 MB).
+const maxUploadSize = 10 << 20
+
+// Event represents a single timestamped numeric observation (legacy format).
 type Event struct {
 	Timestamp time.Time
 	Value     float64
 }
 
-// WindowSummary holds the time bounds and statistics for one window.
-type WindowSummary struct {
-	WindowStart string  `json:"window_start"`
-	WindowEnd   string  `json:"window_end"`
-	Summary     Summary `json:"summary"`
+// ParseWindowSize parses a window size string like "1m", "5m", "15m", "1h".
+// Returns DefaultWindowSize for empty string.
+func ParseWindowSize(s string) (time.Duration, error) {
+	if s == "" {
+		return DefaultWindowSize, nil
+	}
+	s = strings.TrimSpace(s)
+	if len(s) < 2 {
+		return 0, fmt.Errorf("invalid window size: %q", s)
+	}
+	unit := s[len(s)-1]
+	numStr := s[:len(s)-1]
+	num, err := strconv.Atoi(numStr)
+	if err != nil || num <= 0 {
+		return 0, fmt.Errorf("invalid window size: %q", s)
+	}
+	switch unit {
+	case 'm':
+		return time.Duration(num) * time.Minute, nil
+	case 'h':
+		return time.Duration(num) * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("invalid window size unit %q: expected 'm' or 'h'", string(unit))
+	}
 }
 
-// WindowResult is the top-level JSON response containing all windows.
-type WindowResult struct {
-	Windows  []WindowSummary `json:"windows"`
-	Warnings []string        `json:"warnings,omitempty"`
+// FormatWindowSize formats a duration as a human-readable window size string.
+func FormatWindowSize(d time.Duration) string {
+	if d >= time.Hour && d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	}
+	return fmt.Sprintf("%dm", int(d.Minutes()))
 }
 
-// maxUploadSize is the maximum allowed request body size for CSV uploads (10 MB).
-const maxUploadSize = 10 << 20
-
-// ParseCSV reads timestamp,value rows from a CSV reader.
+// ParseCSV reads timestamp,value rows from a CSV reader (legacy format).
 // It expects a header row with columns "timestamp" and "value".
 // Invalid rows are collected as errors but do not stop parsing.
 func ParseCSV(r io.Reader) ([]Event, []error) {
@@ -87,9 +112,98 @@ func ParseCSV(r io.Reader) ([]Event, []error) {
 	return events, errs
 }
 
-// windowStart returns the start of the 5-minute bucket containing t.
-func windowStart(t time.Time) time.Time {
-	return t.UTC().Truncate(WindowSize)
+// ParseMultiCSV reads multi-metric CSV rows from a reader.
+// Expected header: timestamp,metric,value,dimension,source
+// metric is required; dimension and source may be empty.
+// Invalid rows produce warnings but do not stop parsing.
+func ParseMultiCSV(r io.Reader) ([]MultiEvent, []Warning) {
+	reader := csv.NewReader(r)
+
+	header, err := reader.Read()
+	if err != nil {
+		return nil, []Warning{{Row: 1, Message: fmt.Sprintf("failed to read CSV header: %v", err)}}
+	}
+	if len(header) < 3 || header[0] != "timestamp" || header[1] != "metric" || header[2] != "value" {
+		return nil, []Warning{{Row: 1, Message: fmt.Sprintf("invalid CSV header: expected [timestamp,metric,value,...], got %v", header)}}
+	}
+
+	var events []MultiEvent
+	var warnings []Warning
+	lineNum := 1
+
+	for {
+		lineNum++
+		record, err := reader.Read()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			warnings = append(warnings, Warning{Row: lineNum, Message: err.Error()})
+			continue
+		}
+		if len(record) < 3 {
+			warnings = append(warnings, Warning{Row: lineNum, Message: fmt.Sprintf("expected at least 3 columns, got %d", len(record))})
+			continue
+		}
+
+		ts, err := time.Parse(time.RFC3339, record[0])
+		if err != nil {
+			warnings = append(warnings, Warning{Row: lineNum, Message: fmt.Sprintf("invalid timestamp %q: %v", record[0], err)})
+			continue
+		}
+
+		metric := strings.TrimSpace(record[1])
+		if metric == "" {
+			warnings = append(warnings, Warning{Row: lineNum, Message: "empty metric field"})
+			continue
+		}
+
+		val, err := strconv.ParseFloat(record[2], 64)
+		if err != nil {
+			warnings = append(warnings, Warning{Row: lineNum, Message: fmt.Sprintf("invalid value %q: %v", record[2], err)})
+			continue
+		}
+
+		evt := MultiEvent{
+			Timestamp: ts,
+			Metric:    metric,
+			Value:     val,
+		}
+		if len(record) > 3 {
+			evt.Dimension = strings.TrimSpace(record[3])
+		}
+		if len(record) > 4 {
+			evt.Source = strings.TrimSpace(record[4])
+		}
+
+		events = append(events, evt)
+	}
+
+	return events, warnings
+}
+
+// FilterEvents filters multi-events by metric and optional dimension.
+func FilterEvents(events []MultiEvent, metric, dimension string) []MultiEvent {
+	var result []MultiEvent
+	for _, e := range events {
+		if e.Metric != metric {
+			continue
+		}
+		if dimension != "" && e.Dimension != dimension {
+			continue
+		}
+		result = append(result, e)
+	}
+	return result
+}
+
+// windowStartFor returns the start of the bucket containing t for the given window size.
+func windowStartFor(t time.Time, ws time.Duration) time.Time {
+	utc := t.UTC()
+	epoch := utc.Unix()
+	wsSec := int64(ws.Seconds())
+	bucketStart := epoch - (epoch % wsSec)
+	return time.Unix(bucketStart, 0).UTC()
 }
 
 // BuildWindowSummaries groups events into fixed 5-minute windows using
@@ -102,7 +216,7 @@ func BuildWindowSummaries(events []Event) []WindowSummary {
 
 	buckets := make(map[time.Time][]float64)
 	for _, e := range events {
-		ws := windowStart(e.Timestamp)
+		ws := windowStartFor(e.Timestamp, WindowSize)
 		buckets[ws] = append(buckets[ws], e.Value)
 	}
 
@@ -120,6 +234,74 @@ func BuildWindowSummaries(events []Event) []WindowSummary {
 			WindowStart: ws.Format(time.RFC3339),
 			WindowEnd:   ws.Add(WindowSize).Format(time.RFC3339),
 			Summary:     BuildSummary(buckets[ws]),
+		})
+	}
+
+	return result
+}
+
+// multiEventBucket tracks values in a time bucket.
+// Events are pre-sorted by timestamp before bucketing, so insertion order
+// is already chronological.
+type multiEventBucket struct {
+	values []float64
+}
+
+// BuildMultiWindowSummaries groups multi-events into configurable windows.
+// If fillEmpty is true, empty windows between min and max timestamps are filled with zero summaries.
+func BuildMultiWindowSummaries(events []MultiEvent, ws time.Duration, fillEmpty bool) []WindowSummary {
+	if len(events) == 0 {
+		return nil
+	}
+
+	// Sort by timestamp for stable ordering
+	sorted := make([]MultiEvent, len(events))
+	copy(sorted, events)
+	sort.Slice(sorted, func(i, j int) bool {
+		return sorted[i].Timestamp.Before(sorted[j].Timestamp)
+	})
+
+	buckets := make(map[time.Time]*multiEventBucket)
+	for _, e := range sorted {
+		start := windowStartFor(e.Timestamp, ws)
+		b, ok := buckets[start]
+		if !ok {
+			b = &multiEventBucket{}
+			buckets[start] = b
+		}
+		b.values = append(b.values, e.Value)
+	}
+
+	// Collect and sort bucket starts
+	starts := make([]time.Time, 0, len(buckets))
+	for s := range buckets {
+		starts = append(starts, s)
+	}
+	sort.Slice(starts, func(i, j int) bool {
+		return starts[i].Before(starts[j])
+	})
+
+	// If filling empty windows, create entries for all windows in range
+	if fillEmpty && len(starts) > 1 {
+		minStart := starts[0]
+		maxStart := starts[len(starts)-1]
+		allStarts := make([]time.Time, 0)
+		for t := minStart; !t.After(maxStart); t = t.Add(ws) {
+			allStarts = append(allStarts, t)
+			if _, ok := buckets[t]; !ok {
+				buckets[t] = &multiEventBucket{}
+			}
+		}
+		starts = allStarts
+	}
+
+	result := make([]WindowSummary, 0, len(starts))
+	for _, s := range starts {
+		b := buckets[s]
+		result = append(result, WindowSummary{
+			WindowStart: s.Format(time.RFC3339),
+			WindowEnd:   s.Add(ws).Format(time.RFC3339),
+			Summary:     BuildSummaryOrdered(b.values, b.values),
 		})
 	}
 
@@ -163,11 +345,15 @@ func HandleWindowSummary(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	enc := json.NewEncoder(w)
 	enc.SetIndent("", "  ")
-	enc.Encode(WindowResult{Windows: windows, Warnings: warnings})
+	enc.Encode(struct {
+		Windows  []WindowSummary `json:"windows"`
+		Warnings []string        `json:"warnings,omitempty"`
+	}{Windows: windows, Warnings: warnings})
 }
 
 func writeJSONError(w http.ResponseWriter, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
+	// Legacy error format: single "error" field for backward compatibility.
 	json.NewEncoder(w).Encode(map[string]string{"error": message})
 }

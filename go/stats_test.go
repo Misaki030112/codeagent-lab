@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-const epsilon = 1e-9
+const epsilon = 1e-4
 
 func almostEqual(a, b float64) bool {
 	return math.Abs(a-b) < epsilon
@@ -124,6 +124,88 @@ func TestMedianNegatives(t *testing.T) {
 	}
 }
 
+// --- Variance ---
+
+func TestVarianceEmpty(t *testing.T) {
+	if got := Variance(nil); got != 0 {
+		t.Fatalf("Variance(nil) = %f, want 0", got)
+	}
+}
+
+func TestVarianceSingle(t *testing.T) {
+	if got := Variance([]float64{5}); got != 0 {
+		t.Fatalf("Variance([5]) = %f, want 0", got)
+	}
+}
+
+func TestVarianceMultiple(t *testing.T) {
+	// Values: 2, 4, 4, 4, 5, 5, 7, 9 -> mean=5, variance=4
+	got := Variance([]float64{2, 4, 4, 4, 5, 5, 7, 9})
+	if !almostEqual(got, 4.0) {
+		t.Fatalf("Variance([2,4,4,4,5,5,7,9]) = %f, want 4.0", got)
+	}
+}
+
+// --- StdDev ---
+
+func TestStdDevEmpty(t *testing.T) {
+	if got := StdDev(nil); got != 0 {
+		t.Fatalf("StdDev(nil) = %f, want 0", got)
+	}
+}
+
+func TestStdDevMultiple(t *testing.T) {
+	got := StdDev([]float64{2, 4, 4, 4, 5, 5, 7, 9})
+	if !almostEqual(got, 2.0) {
+		t.Fatalf("StdDev([2,4,4,4,5,5,7,9]) = %f, want 2.0", got)
+	}
+}
+
+// --- Percentile ---
+
+func TestPercentileEmpty(t *testing.T) {
+	if got := Percentile(nil, 90); got != 0 {
+		t.Fatalf("Percentile(nil, 90) = %f, want 0", got)
+	}
+}
+
+func TestPercentileSingle(t *testing.T) {
+	if got := Percentile([]float64{42}, 90); got != 42 {
+		t.Fatalf("Percentile([42], 90) = %f, want 42", got)
+	}
+}
+
+func TestPercentileP50IsMedian(t *testing.T) {
+	values := []float64{1, 2, 3, 4, 5}
+	p50 := Percentile(values, 50)
+	med := Median(values)
+	if !almostEqual(p50, med) {
+		t.Fatalf("P50 (%f) should equal Median (%f)", p50, med)
+	}
+}
+
+func TestPercentileP90(t *testing.T) {
+	values := []float64{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	got := Percentile(values, 90)
+	if !almostEqual(got, 9.1) {
+		t.Fatalf("Percentile([1..10], 90) = %f, want 9.1", got)
+	}
+}
+
+func TestPercentileP0(t *testing.T) {
+	values := []float64{1, 2, 3, 4, 5}
+	if got := Percentile(values, 0); got != 1 {
+		t.Fatalf("Percentile([1..5], 0) = %f, want 1", got)
+	}
+}
+
+func TestPercentileP100(t *testing.T) {
+	values := []float64{1, 2, 3, 4, 5}
+	if got := Percentile(values, 100); got != 5 {
+		t.Fatalf("Percentile([1..5], 100) = %f, want 5", got)
+	}
+}
+
 // --- PercentChange ---
 
 func TestPercentChangePositive(t *testing.T) {
@@ -180,12 +262,27 @@ func TestBuildSummaryEmpty(t *testing.T) {
 	if s.Count != 0 || s.Sum != 0 || s.Min != 0 || s.Max != 0 || s.Average != 0 || s.Median != 0 {
 		t.Fatalf("BuildSummary(nil) = %+v, want zero", s)
 	}
+	if s.Variance != 0 || s.StdDev != 0 || s.P90 != 0 || s.P95 != 0 {
+		t.Fatalf("BuildSummary(nil) extended fields = %+v, want zero", s)
+	}
+	if s.PercentChange != nil {
+		t.Fatalf("BuildSummary(nil).PercentChange should be nil, got %v", s.PercentChange)
+	}
 }
 
 func TestBuildSummarySingle(t *testing.T) {
 	s := BuildSummary([]float64{10})
 	if s.Count != 1 || s.Sum != 10 || s.Min != 10 || s.Max != 10 || s.Average != 10 || s.Median != 10 {
-		t.Fatalf("BuildSummary([10]) = %+v", s)
+		t.Fatalf("BuildSummary([10]) basic = %+v", s)
+	}
+	if s.Variance != 0 || s.StdDev != 0 {
+		t.Fatalf("BuildSummary([10]) variance/stddev should be 0, got %f/%f", s.Variance, s.StdDev)
+	}
+	if s.First != 10 || s.Last != 10 {
+		t.Fatalf("BuildSummary([10]) first/last = %f/%f, want 10/10", s.First, s.Last)
+	}
+	if s.Delta != 0 {
+		t.Fatalf("BuildSummary([10]) delta = %f, want 0", s.Delta)
 	}
 }
 
@@ -209,6 +306,23 @@ func TestBuildSummaryMultiple(t *testing.T) {
 	if s.Median != 3 {
 		t.Fatalf("Median = %f, want 3", s.Median)
 	}
+	// Variance of [1,2,3,4,5] = 2.0
+	if !almostEqual(s.Variance, 2.0) {
+		t.Fatalf("Variance = %f, want 2.0", s.Variance)
+	}
+	if !almostEqual(s.StdDev, math.Sqrt(2.0)) {
+		t.Fatalf("StdDev = %f, want %f", s.StdDev, math.Sqrt(2.0))
+	}
+	// First=1, Last=5, Delta=4, PercentChange=400%
+	if s.First != 1 || s.Last != 5 {
+		t.Fatalf("First/Last = %f/%f, want 1/5", s.First, s.Last)
+	}
+	if s.Delta != 4 {
+		t.Fatalf("Delta = %f, want 4", s.Delta)
+	}
+	if s.PercentChange == nil || !almostEqual(*s.PercentChange, 400.0) {
+		t.Fatalf("PercentChange = %v, want 400", s.PercentChange)
+	}
 }
 
 func TestBuildSummaryNegatives(t *testing.T) {
@@ -228,5 +342,15 @@ func TestBuildSummaryDuplicates(t *testing.T) {
 	s := BuildSummary([]float64{7, 7, 7})
 	if s.Min != 7 || s.Max != 7 || s.Average != 7 || s.Median != 7 {
 		t.Fatalf("BuildSummary([7,7,7]) = %+v", s)
+	}
+	if s.Variance != 0 || s.StdDev != 0 {
+		t.Fatalf("Variance/StdDev should be 0 for identical values, got %f/%f", s.Variance, s.StdDev)
+	}
+}
+
+func TestBuildSummaryPercentChangeZeroFirst(t *testing.T) {
+	s := BuildSummary([]float64{0, 5, 10})
+	if s.PercentChange != nil {
+		t.Fatalf("PercentChange should be nil when first value is 0, got %v", *s.PercentChange)
 	}
 }

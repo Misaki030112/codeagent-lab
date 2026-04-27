@@ -1,21 +1,24 @@
 # codeagent-lab
 
-Cross-language analytics summary toolkit — a lab repository for CodeAgent integration testing.
+Cross-language analytics report platform — a lab repository for CodeAgent integration testing.
 
 ## Overview
 
-This repository implements a small but realistic analytics toolkit across three languages, sharing a unified **summary** schema (`count`, `sum`, `min`, `max`, `average`, `median`). It is designed to exercise multi-file, cross-language planning, code generation, and review workflows.
+This repository implements a cross-language analytics toolkit across Go, Python, and TypeScript, sharing a unified **analytics report contract**. It supports multi-metric CSV input, configurable window aggregation, trend detection, anomaly alerting, and dashboard-ready data transforms.
+
+The shared JSON schema is defined in `fixtures/schema/report_schema.json` and enforced through cross-language contract tests consuming shared fixtures.
 
 ## Layout
 
 | Directory | Language | Purpose |
 |-----------|----------|---------|
-| `go/` | Go | Arithmetic helpers (`calc.go`) and statistical summary functions (`stats.go`) |
-| `python/` | Python | Reusable stats module with CLI entry point (`stats.py`) |
-| `web/` | TypeScript | Display/string helpers for analytics dashboards (`string.ts`) |
-| `docs/` | Markdown | Test prompts and manual verification steps |
+| `go/` | Go | Stats engine, multi-metric CSV parsing, window aggregation, report generation, HTTP API |
+| `python/` | Python | Stats module, multi-command CLI, report generation |
+| `web/` | TypeScript | Analytics types, formatting, transforms, query builder, string helpers |
+| `fixtures/` | JSON/CSV | Shared test fixtures and expected golden outputs |
+| `docs/` | Markdown | API docs, test prompts, manual verification steps |
 
-## Quick start
+## Quick Start
 
 ### Go — run tests
 
@@ -29,118 +32,296 @@ cd go && go test ./...
 cd go && go run ./cmd/server
 ```
 
-Upload a CSV file to get rolling 5-minute window summaries:
-
-```bash
-curl -F "file=@events.csv" http://localhost:8080/api/window-summary
-```
-
 ### Python — run tests
 
 ```bash
 cd python && python3 -m unittest discover -s . -p "test_*.py"
 ```
 
-### Python — CLI demo
+### TypeScript — run tests
 
 ```bash
-python3 python/stats.py --values 1,2,3,4,5
+cd web && npm install && npx jest
 ```
 
-Output (JSON):
-
-```json
-{
-  "count": 5,
-  "sum": 15,
-  "min": 1,
-  "max": 5,
-  "average": 3.0,
-  "median": 3
-}
-```
-
-### Python — CSV rolling window
+### TypeScript — type check
 
 ```bash
-python3 python/stats.py --file events.csv
+cd web && npx tsc --noEmit
 ```
 
-Output (JSON):
+## CSV Input Format
 
-```json
-{
-  "windows": [
-    {
-      "window_start": "2026-04-01T10:00:00Z",
-      "window_end": "2026-04-01T10:05:00Z",
-      "summary": {
-        "count": 2,
-        "sum": 30.0,
-        "min": 10.0,
-        "max": 20.0,
-        "average": 15.0,
-        "median": 15.0
-      }
-    }
-  ]
-}
+### Multi-metric format (primary)
+
+```csv
+timestamp,metric,value,dimension,source
+2026-04-01T10:00:00Z,revenue,120.5,cn,ads
+2026-04-01T10:01:00Z,revenue,80.0,us,organic
+2026-04-01T10:02:00Z,latency_ms,240.0,cn,api
 ```
 
-> **Note:** `--values` and `--file` are mutually exclusive.
+| Column | Required | Description |
+|--------|----------|-------------|
+| `timestamp` | Yes | RFC 3339 format (UTC recommended) |
+| `metric` | Yes | Metric name (e.g., `revenue`, `latency_ms`) |
+| `value` | Yes | Floating-point number |
+| `dimension` | No | Grouping dimension (e.g., region, country) |
+| `source` | No | Data source label |
 
-### TypeScript — function reference
-
-| Function | Description | Example |
-|----------|-------------|---------|
-| `slugify(input)` | URL-safe slug | `"Hello World!"` → `"hello-world"` |
-| `formatMetricLabel(key)` | Title-case label from snake/camel key | `"total_revenue"` → `"Total Revenue"` |
-| `buildSummaryAnchor(section, label)` | HTML anchor for summary navigation | `("revenue", "Rev")` → `<a href="#revenue">Rev</a>` |
-| `truncateMiddle(input, max)` | Ellipsis in the middle | `("abcdefghij", 7)` → `"ab...ij"` |
-
-## API summary
-
-### Go (`package calc`)
-
-- `Add(a, b int) int`
-- `Divide(a, b int) (int, error)`
-- `Sum(values []float64) float64`
-- `Average(values []float64) float64`
-- `Median(values []float64) float64`
-- `PercentChange(prev, current float64) (float64, error)`
-- `BuildSummary(values []float64) Summary`
-- `ParseCSV(r io.Reader) ([]Event, []error)` — parse `timestamp,value` CSV
-- `BuildWindowSummaries(events []Event) []WindowSummary` — fixed 5-min window aggregation
-- `HandleWindowSummary(w, r)` — HTTP handler (POST multipart form with `file` field)
-
-### Python (`stats`)
-
-- `average(values)` → `float`
-- `median(values)` → `float`
-- `percent_change(prev, current)` → `float`
-- `build_summary(values)` → `dict`
-- `parse_csv(filepath)` → `list[tuple[datetime, float]]`
-- `build_window_summaries(events)` → `list[dict]`
-
-## CSV input format
+### Legacy format (backward compatible)
 
 ```csv
 timestamp,value
 2026-04-01T10:00:00Z,10
-2026-04-01T10:02:00Z,20
-2026-04-01T10:06:00Z,30
 ```
 
-- `timestamp`: RFC 3339 format (UTC recommended)
-- `value`: floating-point number
+## Summary Schema (Shared Contract)
 
-## Rolling window design
+All three languages produce identical summary objects with 14 fields:
+
+```json
+{
+  "count": 6,
+  "sum": 756.0,
+  "min": 80.0,
+  "max": 200.0,
+  "average": 126.0,
+  "median": 115.25,
+  "variance": 1808.92,
+  "std_dev": 42.53,
+  "p90": 190.0,
+  "p95": 195.0,
+  "first": 120.5,
+  "last": 150.0,
+  "delta": 29.5,
+  "percent_change": 24.48
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `count` | Number of values |
+| `sum` | Sum of all values |
+| `min` / `max` | Minimum / maximum value |
+| `average` | Arithmetic mean |
+| `median` | Median value |
+| `variance` | Population variance |
+| `std_dev` | Population standard deviation |
+| `p90` / `p95` | 90th / 95th percentile (linear interpolation) |
+| `first` / `last` | First / last value in time order |
+| `delta` | `last - first` |
+| `percent_change` | Percentage change from first to last (`null` when first is 0) |
+
+## Report Schema
+
+The report endpoint returns a higher-level analytics report:
+
+```json
+{
+  "generated_at": "2026-04-01T12:00:00Z",
+  "metric": "revenue",
+  "dimension": "",
+  "window_size": "5m",
+  "current_windows": [ ... ],
+  "previous_windows": [],
+  "overall_summary": { ... },
+  "trend": "up",
+  "alerts": []
+}
+```
+
+### Trend Values
+
+| Value | Meaning |
+|-------|---------|
+| `up` | Last window average > first by >5% |
+| `down` | Last window average < first by >5% |
+| `flat` | Change within ±5% |
+| `insufficient_data` | Fewer than 2 windows |
+
+### Alert Types
+
+| Type | Rule |
+|------|------|
+| `spike` | Window average > 2× overall average |
+| `drop` | Window average < 0.5× overall average |
+| `high_variance` | Window std_dev > 2× overall std_dev |
+
+## Go HTTP API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/summary` | POST | Upload multi-metric CSV, return filtered summary |
+| `/api/window-summary` | POST | Upload legacy CSV, return per-window summaries |
+| `/api/report` | POST | Upload multi-metric CSV, return full analytics report |
+| `/healthz` | GET | Health check |
+| `/api/meta` | GET | API version and metadata |
+
+### Query Parameters (form fields)
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `metric` | Filter by metric name | First metric in CSV |
+| `dimension` | Filter by dimension | (none) |
+| `window_size` | Window size (`1m`, `5m`, `15m`, `1h`) | `5m` |
+| `fill_empty_windows` | Fill gaps with empty windows (`true`/`false`) | `false` |
+
+### Example: Generate a report
+
+```bash
+curl -F "file=@fixtures/events/basic.csv" \
+     -F "metric=revenue" \
+     -F "window_size=5m" \
+     http://localhost:8080/api/report
+```
+
+### Error Responses
+
+All new endpoints use a unified JSON error structure:
+
+```json
+{
+  "error": "bad_request",
+  "message": "CSV parsing failed"
+}
+```
+
+The legacy `/api/window-summary` endpoint preserves the original error format: `{"error": "..."}`.
+
+**Upload limit:** 10 MB per request.
+
+## Python CLI
+
+The CLI supports three subcommands:
+
+### `summary` — Compute summary statistics
+
+```bash
+# From values
+python3 python/stats.py summary --values 1,2,3,4,5
+
+# From multi-metric CSV
+python3 python/stats.py summary --file fixtures/events/basic.csv --metric revenue
+```
+
+### `window-summary` — Compute window summaries
+
+```bash
+python3 python/stats.py window-summary \
+  --file fixtures/events/basic.csv \
+  --metric revenue \
+  --window-size 5m
+```
+
+### `report` — Generate full analytics report
+
+```bash
+python3 python/stats.py report \
+  --file fixtures/events/basic.csv \
+  --metric revenue \
+  --window-size 5m \
+  --fill-empty-windows
+```
+
+### Legacy mode (backward compatible)
+
+```bash
+python3 python/stats.py --values 1,2,3,4,5
+python3 python/stats.py --file events.csv
+```
+
+## TypeScript Analytics Layer
+
+### Types (`web/src/analytics/types.ts`)
+
+TypeScript type definitions mirroring the shared JSON contract: `Summary`, `WindowSummary`, `Report`, `Alert`, `Trend`, `QueryParams`.
+
+### Format (`web/src/analytics/format.ts`)
+
+Display formatting for numbers, percentages, deltas, trends, alerts, timestamps, and window sizes.
+
+### Transform (`web/src/analytics/transform.ts`)
+
+Convert report data into view models: table rows, chart data points, navigation items, alert groups, report comparisons.
+
+### Query (`web/src/analytics/query.ts`)
+
+Build API URLs, parse/serialize query parameters, manage URL hash state.
+
+### String Helpers (`web/src/string.ts`)
+
+| Function | Description | Example |
+|----------|-------------|---------|
+| `slugify(input)` | URL-safe slug | `"Hello World!"` → `"hello-world"` |
+| `formatMetricLabel(key)` | Title-case label | `"total_revenue"` → `"Total Revenue"` |
+| `buildSummaryAnchor(section, label)` | HTML anchor | `("revenue", "Rev")` → `<a href="#revenue">Rev</a>` |
+| `truncateMiddle(input, max)` | Middle ellipsis | `("abcdefghij", 7)` → `"ab...ij"` |
+
+## Shared Fixtures & Contract Tests
+
+### Fixture Files
+
+| File | Purpose |
+|------|---------|
+| `fixtures/events/basic.csv` | Single metric (revenue), 6 events, 2 windows |
+| `fixtures/events/multi_metric.csv` | Two metrics (revenue + latency_ms), 9 events |
+| `fixtures/events/invalid_rows.csv` | Mix of valid and invalid rows |
+| `fixtures/events/empty.csv` | Header only, no data rows |
+| `fixtures/events/single_metric_single_value.csv` | Single event |
+| `fixtures/schema/report_schema.json` | JSON Schema for the report contract |
+| `fixtures/expected/basic_report.json` | Expected output for basic.csv report |
+| `fixtures/expected/multi_metric_revenue_5m.json` | Expected output for multi_metric.csv revenue |
+
+### Contract Test Strategy
+
+Go and Python both consume the same fixture CSV files and verify:
+- Same event count after parsing
+- Same window count and boundaries
+- Same overall summary values (count, sum, min, max)
+- Same trend and alert behavior
+
+TypeScript verifies type compatibility via the shared `Summary` interface (14 fields, matching JSON keys).
+
+## Window Design
 
 | Aspect | Rule |
 |--------|------|
-| Window type | Fixed 5-minute time buckets (not sliding) |
-| Boundary | `[start, end)` — an event at exactly `10:05:00` belongs to the `10:05–10:10` bucket |
-| Out-of-order input | Sorted by timestamp before grouping |
-| Empty windows | Not emitted — only windows containing events appear in output |
-| Invalid rows | Skipped with warnings; valid rows are still processed |
-| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median` |
+| Window type | Configurable tumbling windows (default 5 minutes) |
+| Sizes | `1m`, `5m`, `15m`, `1h` |
+| Boundary | `[start, end)` — event at `10:05:00` belongs to `10:05–10:10` bucket |
+| Out-of-order | Sorted by timestamp before grouping |
+| Empty windows | Not emitted by default; `fill_empty_windows` fills gaps |
+| Invalid rows | Skipped with structured warnings; valid rows still processed |
+
+## Edge Case Behavior
+
+| Scenario | Behavior |
+|----------|----------|
+| Empty input | Zero-valued summary, `percent_change: null`, trend: `insufficient_data` |
+| Single value | Summary with count=1, variance=0, delta=0 |
+| Zero first value | `percent_change: null` (not an error) |
+| Negative values | Handled correctly; `percent_change` uses `abs(prev)` |
+| Missing timezone | Row skipped with warning |
+| Empty metric field | Row skipped with warning |
+| Duplicate timestamps | All events included, ordered by occurrence |
+
+## Manual Verification
+
+```bash
+# Go tests
+cd go && go test ./... -v
+
+# Python tests
+cd python && python3 -m unittest discover -s . -p "test_*.py" -v
+
+# TypeScript tests
+cd web && npx jest
+
+# CLI report
+python3 python/stats.py report --file fixtures/events/basic.csv --metric revenue
+
+# Go API report
+cd go && go run ./cmd/server &
+curl -F "file=@../fixtures/events/basic.csv" -F "metric=revenue" http://localhost:8080/api/report
+```

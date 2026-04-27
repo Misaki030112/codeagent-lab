@@ -1,0 +1,98 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Analytics Report Schema",
+  "description": "Shared contract for cross-language analytics report output",
+  "definitions": {
+    "summary": {
+      "type": "object",
+      "description": "Statistical summary of a set of values",
+      "properties": {
+        "count": { "type": "integer", "description": "Number of values" },
+        "sum": { "type": "number", "description": "Sum of all values" },
+        "min": { "type": "number", "description": "Minimum value" },
+        "max": { "type": "number", "description": "Maximum value" },
+        "average": { "type": "number", "description": "Arithmetic mean" },
+        "median": { "type": "number", "description": "Median value" },
+        "variance": { "type": "number", "description": "Population variance" },
+        "std_dev": { "type": "number", "description": "Population standard deviation" },
+        "p90": { "type": "number", "description": "90th percentile" },
+        "p95": { "type": "number", "description": "95th percentile" },
+        "first": { "type": "number", "description": "First value in time order" },
+        "last": { "type": "number", "description": "Last value in time order" },
+        "delta": { "type": "number", "description": "last - first" },
+        "percent_change": { "type": ["number", "null"], "description": "Percentage change from first to last. Null when first is 0." }
+      },
+      "required": ["count", "sum", "min", "max", "average", "median", "variance", "std_dev", "p90", "p95", "first", "last", "delta", "percent_change"]
+    },
+    "window_summary": {
+      "type": "object",
+      "description": "Aggregated summary for a time window",
+      "properties": {
+        "window_start": { "type": "string", "format": "date-time", "description": "Window start time (RFC3339)" },
+        "window_end": { "type": "string", "format": "date-time", "description": "Window end time (RFC3339)" },
+        "summary": { "$ref": "#/definitions/summary" }
+      },
+      "required": ["window_start", "window_end", "summary"]
+    },
+    "trend": {
+      "type": "string",
+      "enum": ["up", "down", "flat", "insufficient_data"],
+      "description": "Overall trend direction"
+    },
+    "alert_type": {
+      "type": "string",
+      "enum": ["spike", "drop", "high_variance"],
+      "description": "Type of anomaly detected"
+    },
+    "alert": {
+      "type": "object",
+      "properties": {
+        "type": { "$ref": "#/definitions/alert_type" },
+        "window_start": { "type": "string", "format": "date-time" },
+        "message": { "type": "string" },
+        "value": { "type": "number" },
+        "threshold": { "type": "number" }
+      },
+      "required": ["type", "window_start", "message"]
+    },
+    "warning": {
+      "type": "object",
+      "properties": {
+        "row": { "type": "integer", "description": "1-based row number in CSV" },
+        "message": { "type": "string" }
+      },
+      "required": ["row", "message"]
+    },
+    "api_error": {
+      "type": "object",
+      "properties": {
+        "error": { "type": "string", "description": "Error code" },
+        "message": { "type": "string", "description": "Human-readable error message" }
+      },
+      "required": ["error", "message"]
+    }
+  },
+  "type": "object",
+  "description": "Top-level analytics report",
+  "properties": {
+    "generated_at": { "type": "string", "format": "date-time", "description": "Report generation timestamp" },
+    "metric": { "type": "string", "description": "Metric name being reported" },
+    "dimension": { "type": "string", "description": "Dimension filter applied (empty string if none)" },
+    "window_size": { "type": "string", "description": "Window size (e.g. 1m, 5m, 15m, 1h)" },
+    "current_windows": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/window_summary" }
+    },
+    "previous_windows": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/window_summary" }
+    },
+    "overall_summary": { "$ref": "#/definitions/summary" },
+    "trend": { "$ref": "#/definitions/trend" },
+    "alerts": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/alert" }
+    }
+  },
+  "required": ["generated_at", "metric", "dimension", "window_size", "current_windows", "previous_windows", "overall_summary", "trend", "alerts"]
+}
