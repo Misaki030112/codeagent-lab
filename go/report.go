@@ -110,15 +110,16 @@ func detectAlerts(windows []WindowSummary) []Alert {
 	overallAvg := Average(allValues)
 	overallStdDev := StdDev(allValues)
 
+	// Thresholds are constant across all windows — compute once.
+	spikeThreshold := overallAvg * spikeMultiplier
+	dropThreshold := overallAvg * dropMultiplier
+	varThreshold := overallStdDev * varianceMultiplier
+
 	var alerts []Alert
 	for _, w := range windows {
 		if w.Summary.Count == 0 {
 			continue
 		}
-
-		spikeThreshold := overallAvg * spikeMultiplier
-		dropThreshold := overallAvg * dropMultiplier
-		varThreshold := overallStdDev * varianceMultiplier
 
 		if overallAvg > 0 && w.Summary.Average > spikeThreshold {
 			alerts = append(alerts, Alert{

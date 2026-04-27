@@ -90,6 +90,32 @@ def percentile(values: Iterable[float], p: float) -> float:
     return items[lower] * (1 - frac) + items[upper] * frac
 
 
+def _median_sorted(sorted_items: list[float]) -> float:
+    """Return the median from a pre-sorted list."""
+    n = len(sorted_items)
+    if n == 0:
+        return 0
+    if n % 2 == 1:
+        return sorted_items[n // 2]
+    return (sorted_items[n // 2 - 1] + sorted_items[n // 2]) / 2
+
+
+def _percentile_sorted(sorted_items: list[float], p: float) -> float:
+    """Return the p-th percentile from a pre-sorted list."""
+    n = len(sorted_items)
+    if n == 0:
+        return 0
+    if n == 1:
+        return sorted_items[0]
+    rank = (p / 100.0) * (n - 1)
+    lower = int(math.floor(rank))
+    upper = int(math.ceil(rank))
+    if lower == upper:
+        return sorted_items[lower]
+    frac = rank - lower
+    return sorted_items[lower] * (1 - frac) + sorted_items[upper] * frac
+
+
 def percent_change(prev: float, current: float) -> float:
     """Return the percentage change from prev to current.
 
@@ -114,6 +140,9 @@ def build_summary_ordered(values: Iterable[float], ordered_values: list[float] |
 
     ordered_values provides time-ordered sequence for first/last/delta/percent_change.
     If None, values order is used.
+
+    Sorts the data once internally and reuses the sorted copy for min, max,
+    median, and percentile calculations.
     """
     items = list(values)
     if not items:
@@ -137,6 +166,15 @@ def build_summary_ordered(values: Iterable[float], ordered_values: list[float] |
     if ordered_values is None:
         ordered_values = items
 
+    n = len(items)
+    sorted_items = sorted(items)
+
+    total = sum(items)
+    avg = total / n
+
+    # Population variance (inline to avoid redundant average call).
+    var = sum((x - avg) ** 2 for x in items) / n
+
     first_val = ordered_values[0]
     last_val = ordered_values[-1]
     delta = last_val - first_val
@@ -146,16 +184,16 @@ def build_summary_ordered(values: Iterable[float], ordered_values: list[float] |
         pct = None
 
     return {
-        "count": len(items),
-        "sum": sum(items),
-        "min": min(items),
-        "max": max(items),
-        "average": average(items),
-        "median": median(items),
-        "variance": variance(items),
-        "std_dev": std_dev(items),
-        "p90": percentile(items, 90),
-        "p95": percentile(items, 95),
+        "count": n,
+        "sum": total,
+        "min": sorted_items[0],
+        "max": sorted_items[-1],
+        "average": avg,
+        "median": _median_sorted(sorted_items),
+        "variance": var,
+        "std_dev": math.sqrt(var),
+        "p90": _percentile_sorted(sorted_items, 90),
+        "p95": _percentile_sorted(sorted_items, 95),
         "first": first_val,
         "last": last_val,
         "delta": delta,
@@ -435,6 +473,11 @@ def detect_alerts(windows: list[dict]) -> list[dict]:
     overall_avg = average(avgs)
     overall_std = std_dev(avgs)
 
+    # Thresholds are constant across all windows — compute once.
+    spike_threshold = overall_avg * SPIKE_MULTIPLIER
+    drop_threshold = overall_avg * DROP_MULTIPLIER
+    var_threshold = overall_std * VARIANCE_MULTIPLIER
+
     alerts = []
     for w in windows:
         if w["summary"]["count"] == 0:
@@ -442,10 +485,6 @@ def detect_alerts(windows: list[dict]) -> list[dict]:
 
         w_avg = w["summary"]["average"]
         w_std = w["summary"]["std_dev"]
-
-        spike_threshold = overall_avg * SPIKE_MULTIPLIER
-        drop_threshold = overall_avg * DROP_MULTIPLIER
-        var_threshold = overall_std * VARIANCE_MULTIPLIER
 
         if overall_avg > 0 and w_avg > spike_threshold:
             alerts.append({
@@ -496,18 +535,11 @@ def build_report(
     trend = compute_trend(windows)
     alerts = detect_alerts(windows)
 
-    # Format window size
-    total_min = int(ws.total_seconds()) // 60
-    if total_min >= 60 and total_min % 60 == 0:
-        ws_str = f"{total_min // 60}h"
-    else:
-        ws_str = f"{total_min}m"
-
     return {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "metric": metric,
         "dimension": dimension,
-        "window_size": ws_str,
+        "window_size": format_window_size(ws),
         "current_windows": windows,
         "previous_windows": [],
         "overall_summary": overall,
@@ -519,6 +551,14 @@ def build_report(
 # ---------------------------------------------------------------------------
 # Window size parsing
 # ---------------------------------------------------------------------------
+
+def format_window_size(ws: timedelta) -> str:
+    """Format a timedelta as a human-readable window size string (e.g. '5m', '1h')."""
+    total_min = int(ws.total_seconds()) // 60
+    if total_min >= 60 and total_min % 60 == 0:
+        return f"{total_min // 60}h"
+    return f"{total_min}m"
+
 
 def parse_window_size(s: str) -> timedelta:
     """Parse a window size string like '1m', '5m', '15m', '1h'.
@@ -555,6 +595,13 @@ def _parse_values_arg(raw: str) -> list[float]:
     except ValueError as exc:
         print(f"Error parsing values: {exc}", file=sys.stderr)
         sys.exit(1)
+
+
+def _resolve_metric(metric: str | None, events: list[dict]) -> str:
+    """Return the given metric, or default to the first event's metric."""
+    if not metric and events:
+        return events[0]["metric"]
+    return metric or ""
 
 
 def main() -> None:
@@ -613,9 +660,7 @@ def main() -> None:
             print(json.dumps(result, indent=2))
         else:
             events, warnings = parse_multi_csv(args.file)
-            metric = args.metric
-            if not metric and events:
-                metric = events[0]["metric"]
+            metric = _resolve_metric(args.metric, events)
             filtered = filter_events(events, metric, args.dimension)
             values = [e["value"] for e in filtered]
             result = build_summary(values)
@@ -627,9 +672,7 @@ def main() -> None:
     elif args.command == "window-summary":
         events, warnings = parse_multi_csv(args.file)
         ws = parse_window_size(args.window_size)
-        metric = args.metric
-        if not metric and events:
-            metric = events[0]["metric"]
+        metric = _resolve_metric(args.metric, events)
         filtered = filter_events(events, metric, args.dimension)
         windows = build_multi_window_summaries(filtered, ws, args.fill_empty_windows)
         output = {"windows": windows}
@@ -640,9 +683,7 @@ def main() -> None:
     elif args.command == "report":
         events, warnings = parse_multi_csv(args.file)
         ws = parse_window_size(args.window_size)
-        metric = args.metric
-        if not metric and events:
-            metric = events[0]["metric"]
+        metric = _resolve_metric(args.metric, events)
         report = build_report(events, metric, args.dimension, ws, args.fill_empty_windows)
         output = {"report": report}
         if warnings:

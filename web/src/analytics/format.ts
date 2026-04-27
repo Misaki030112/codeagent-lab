@@ -58,7 +58,7 @@ export function trendLabel(trend: Trend): string {
  * Return a CSS-friendly class name for a trend value.
  */
 export function trendClass(trend: Trend): string {
-  return `trend-${trend.replace("_", "-")}`;
+  return `trend-${trend.replace(/_/g, "-")}`;
 }
 
 /**
@@ -83,7 +83,7 @@ export function alertLabel(alertType: AlertType): string {
  * Return a CSS-friendly class name for an alert type.
  */
 export function alertClass(alertType: AlertType): string {
-  return `alert-${alertType.replace("_", "-")}`;
+  return `alert-${alertType.replace(/_/g, "-")}`;
 }
 
 /**

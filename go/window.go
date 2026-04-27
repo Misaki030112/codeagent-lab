@@ -240,10 +240,11 @@ func BuildWindowSummaries(events []Event) []WindowSummary {
 	return result
 }
 
-// multiEventBucket tracks events in a time bucket preserving insertion order.
+// multiEventBucket tracks values in a time bucket.
+// Events are pre-sorted by timestamp before bucketing, so insertion order
+// is already chronological.
 type multiEventBucket struct {
-	values  []float64
-	ordered []float64 // time-ordered values
+	values []float64
 }
 
 // BuildMultiWindowSummaries groups multi-events into configurable windows.
@@ -269,7 +270,6 @@ func BuildMultiWindowSummaries(events []MultiEvent, ws time.Duration, fillEmpty 
 			buckets[start] = b
 		}
 		b.values = append(b.values, e.Value)
-		b.ordered = append(b.ordered, e.Value)
 	}
 
 	// Collect and sort bucket starts
@@ -301,7 +301,7 @@ func BuildMultiWindowSummaries(events []MultiEvent, ws time.Duration, fillEmpty 
 		result = append(result, WindowSummary{
 			WindowStart: s.Format(time.RFC3339),
 			WindowEnd:   s.Add(ws).Format(time.RFC3339),
-			Summary:     BuildSummaryOrdered(b.values, b.ordered),
+			Summary:     BuildSummaryOrdered(b.values, b.values),
 		})
 	}
 

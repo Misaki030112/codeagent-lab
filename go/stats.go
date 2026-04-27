@@ -85,6 +85,32 @@ func Percentile(values []float64, p float64) float64 {
 	return sorted[lower]*(1-frac) + sorted[upper]*frac
 }
 
+// medianFromSorted returns the median from a pre-sorted non-empty slice.
+func medianFromSorted(sorted []float64) float64 {
+	n := len(sorted)
+	if n%2 == 1 {
+		return sorted[n/2]
+	}
+	return (sorted[n/2-1] + sorted[n/2]) / 2
+}
+
+// percentileFromSorted returns the p-th percentile (0–100) from a pre-sorted
+// non-empty slice using linear interpolation.
+func percentileFromSorted(sorted []float64, p float64) float64 {
+	n := len(sorted)
+	if n == 1 {
+		return sorted[0]
+	}
+	rank := (p / 100.0) * float64(n-1)
+	lower := int(math.Floor(rank))
+	upper := int(math.Ceil(rank))
+	if lower == upper {
+		return sorted[lower]
+	}
+	frac := rank - float64(lower)
+	return sorted[lower]*(1-frac) + sorted[upper]*frac
+}
+
 // PercentChange calculates the percentage change from prev to current.
 // Returns an error if prev is zero.
 func PercentChange(prev, current float64) (float64, error) {
@@ -104,6 +130,9 @@ func BuildSummary(values []float64) Summary {
 // BuildSummaryOrdered computes descriptive statistics for the given values.
 // orderedValues provides the time-ordered sequence for first/last/delta/percent_change.
 // If orderedValues is nil or empty, values is used for ordering as well.
+//
+// Internally sorts the data once and reuses the sorted copy for min, max,
+// median, and percentile calculations, avoiding redundant sort passes.
 func BuildSummaryOrdered(values []float64, orderedValues []float64) Summary {
 	n := len(values)
 	if n == 0 {
@@ -114,28 +143,35 @@ func BuildSummaryOrdered(values []float64, orderedValues []float64) Summary {
 		orderedValues = values
 	}
 
+	// Sort once — reuse for min, max, median, and percentiles.
+	sorted := make([]float64, n)
+	copy(sorted, values)
+	sort.Float64s(sorted)
+
+	total := Sum(values)
+	avg := total / float64(n)
+
+	// Population variance (inline to avoid redundant Average call).
+	var sumSq float64
+	for _, v := range values {
+		d := v - avg
+		sumSq += d * d
+	}
+	vari := sumSq / float64(n)
+
 	s := Summary{
 		Count:    n,
-		Sum:      Sum(values),
-		Average:  Average(values),
-		Median:   Median(values),
-		Variance: Variance(values),
-		StdDev:   StdDev(values),
-		P90:      Percentile(values, 90),
-		P95:      Percentile(values, 95),
-		Min:      values[0],
-		Max:      values[0],
+		Sum:      total,
+		Average:  avg,
+		Min:      sorted[0],
+		Max:      sorted[n-1],
+		Median:   medianFromSorted(sorted),
+		Variance: vari,
+		StdDev:   math.Sqrt(vari),
+		P90:      percentileFromSorted(sorted, 90),
+		P95:      percentileFromSorted(sorted, 95),
 		First:    orderedValues[0],
 		Last:     orderedValues[len(orderedValues)-1],
-	}
-
-	for _, v := range values[1:] {
-		if v < s.Min {
-			s.Min = v
-		}
-		if v > s.Max {
-			s.Max = v
-		}
 	}
 
 	s.Delta = s.Last - s.First
