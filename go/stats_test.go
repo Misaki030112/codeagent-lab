@@ -232,6 +232,9 @@ func TestBuildSummaryDuplicates(t *testing.T) {
 	if s.Variance != 0 {
 		t.Fatalf("Variance([7,7,7]) = %f, want 0", s.Variance)
 	}
+	if s.StdDev != 0 {
+		t.Fatalf("StdDev([7,7,7]) = %f, want 0", s.StdDev)
+	}
 }
 
 // --- Variance ---

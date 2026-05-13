@@ -130,6 +130,9 @@ class TestStdDev(unittest.TestCase):
     def test_negatives(self):
         self.assertAlmostEqual(std_dev([-2, -1, 0, 1, 2]), 2.0 ** 0.5)
 
+    def test_generator(self):
+        self.assertAlmostEqual(std_dev(x for x in [1, 2, 3, 4, 5]), 2.0 ** 0.5)
+
 
 class TestBuildSummary(unittest.TestCase):
     def test_empty(self):

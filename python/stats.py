@@ -64,8 +64,7 @@ def variance(values: Iterable[float]) -> float:
 
 def std_dev(values: Iterable[float]) -> float:
     """Return the population standard deviation. Returns 0 for empty or single-element input."""
-    items = list(values)
-    return math.sqrt(variance(items))
+    return math.sqrt(variance(values))
 
 
 def build_summary(values: Iterable[float]) -> dict:
@@ -82,6 +81,7 @@ def build_summary(values: Iterable[float]) -> dict:
             "variance": 0,
             "std_dev": 0,
         }
+    var = variance(items)
     return {
         "count": len(items),
         "sum": sum(items),
@@ -89,8 +89,8 @@ def build_summary(values: Iterable[float]) -> dict:
         "max": max(items),
         "average": average(items),
         "median": median(items),
-        "variance": variance(items),
-        "std_dev": std_dev(items),
+        "variance": var,
+        "std_dev": math.sqrt(var),
     }
 
 
