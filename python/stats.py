@@ -15,6 +15,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import math
 import sys
 from datetime import datetime, timedelta, timezone
 from typing import Iterable
@@ -41,6 +42,22 @@ def median(values: Iterable[float]) -> float:
     return (items[n // 2 - 1] + items[n // 2]) / 2
 
 
+def variance(values: Iterable[float]) -> float:
+    """Return the population variance. Returns 0 for empty or single-element input."""
+    items = list(values)
+    n = len(items)
+    if n < 2:
+        return 0
+    mean = average(items)
+    return sum((v - mean) ** 2 for v in items) / n
+
+
+def std_dev(values: Iterable[float]) -> float:
+    """Return the population standard deviation. Returns 0 for empty or single-element input."""
+    items = list(values)
+    return math.sqrt(variance(items))
+
+
 def percent_change(prev: float, current: float) -> float:
     """Return the percentage change from prev to current.
 
@@ -52,7 +69,7 @@ def percent_change(prev: float, current: float) -> float:
 
 
 def build_summary(values: Iterable[float]) -> dict:
-    """Return a dict with count, sum, min, max, average, and median."""
+    """Return a dict with count, sum, min, max, average, median, variance, and std_dev."""
     items = list(values)
     if not items:
         return {
@@ -62,6 +79,8 @@ def build_summary(values: Iterable[float]) -> dict:
             "max": 0,
             "average": 0,
             "median": 0,
+            "variance": 0,
+            "std_dev": 0,
         }
     return {
         "count": len(items),
@@ -70,6 +89,8 @@ def build_summary(values: Iterable[float]) -> dict:
         "max": max(items),
         "average": average(items),
         "median": median(items),
+        "variance": variance(items),
+        "std_dev": std_dev(items),
     }
 
 

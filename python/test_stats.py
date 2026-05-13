@@ -1,6 +1,7 @@
 """Tests for the stats module."""
 
 import json
+import math
 import os
 import subprocess
 import tempfile
@@ -14,6 +15,8 @@ from stats import (
     median,
     parse_csv,
     percent_change,
+    std_dev,
+    variance,
 )
 
 
@@ -86,6 +89,49 @@ class TestPercentChange(unittest.TestCase):
         self.assertAlmostEqual(percent_change(-100, -50), 50.0)
 
 
+class TestVariance(unittest.TestCase):
+    def test_empty(self):
+        self.assertEqual(variance([]), 0)
+
+    def test_single(self):
+        self.assertEqual(variance([42]), 0)
+
+    def test_two_equal(self):
+        self.assertEqual(variance([3, 3]), 0)
+
+    def test_two_different(self):
+        self.assertAlmostEqual(variance([2, 4]), 1.0)
+
+    def test_known_values(self):
+        self.assertAlmostEqual(variance([2, 4, 4, 4, 5, 5, 7, 9]), 4.0)
+
+    def test_negatives(self):
+        self.assertAlmostEqual(variance([-3, -1, 1, 3]), 5.0)
+
+    def test_generator(self):
+        self.assertAlmostEqual(variance(x for x in [2, 4, 4, 4, 5, 5, 7, 9]), 4.0)
+
+
+class TestStdDev(unittest.TestCase):
+    def test_empty(self):
+        self.assertEqual(std_dev([]), 0)
+
+    def test_single(self):
+        self.assertEqual(std_dev([5]), 0)
+
+    def test_two_equal(self):
+        self.assertEqual(std_dev([7, 7]), 0)
+
+    def test_known_values(self):
+        self.assertAlmostEqual(std_dev([2, 4, 4, 4, 5, 5, 7, 9]), 2.0)
+
+    def test_negatives(self):
+        self.assertAlmostEqual(std_dev([-3, -1, 1, 3]), math.sqrt(5))
+
+    def test_generator(self):
+        self.assertAlmostEqual(std_dev(x for x in [2, 4, 4, 4, 5, 5, 7, 9]), 2.0)
+
+
 class TestBuildSummary(unittest.TestCase):
     def test_empty(self):
         s = build_summary([])
@@ -118,8 +164,18 @@ class TestBuildSummary(unittest.TestCase):
 
     def test_keys_present(self):
         s = build_summary([1, 2, 3])
-        for key in ("count", "sum", "min", "max", "average", "median"):
+        for key in ("count", "sum", "min", "max", "average", "median", "variance", "std_dev"):
             self.assertIn(key, s)
+
+    def test_variance_and_stddev(self):
+        s = build_summary([2, 4, 4, 4, 5, 5, 7, 9])
+        self.assertAlmostEqual(s["variance"], 4.0)
+        self.assertAlmostEqual(s["std_dev"], 2.0)
+
+    def test_empty_variance_and_stddev(self):
+        s = build_summary([])
+        self.assertEqual(s["variance"], 0)
+        self.assertEqual(s["std_dev"], 0)
 
     def test_generator_input(self):
         s = build_summary(x for x in [2, 4, 6])
