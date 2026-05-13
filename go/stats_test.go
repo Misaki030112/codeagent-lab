@@ -229,4 +229,62 @@ func TestBuildSummaryDuplicates(t *testing.T) {
 	if s.Min != 7 || s.Max != 7 || s.Average != 7 || s.Median != 7 {
 		t.Fatalf("BuildSummary([7,7,7]) = %+v", s)
 	}
+	if s.Variance != 0 {
+		t.Fatalf("Variance([7,7,7]) = %f, want 0", s.Variance)
+	}
+	if s.StdDev != 0 {
+		t.Fatalf("StdDev([7,7,7]) = %f, want 0", s.StdDev)
+	}
+}
+
+// --- Variance ---
+
+func TestVariance(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  []float64
+		want   float64
+	}{
+		{"nil", nil, 0},
+		{"empty", []float64{}, 0},
+		{"single", []float64{5}, 0},
+		{"identical", []float64{3, 3, 3}, 0},
+		{"two values", []float64{2, 4}, 1},
+		{"1..5", []float64{1, 2, 3, 4, 5}, 2},
+		{"negatives", []float64{-2, -1, 0, 1, 2}, 2},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Variance(tc.input)
+			if !almostEqual(got, tc.want) {
+				t.Fatalf("Variance(%v) = %f, want %f", tc.input, got, tc.want)
+			}
+		})
+	}
+}
+
+// --- StdDev ---
+
+func TestStdDev(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []float64
+		want  float64
+	}{
+		{"nil", nil, 0},
+		{"empty", []float64{}, 0},
+		{"single", []float64{42}, 0},
+		{"identical", []float64{7, 7, 7, 7}, 0},
+		{"two values", []float64{2, 4}, 1},
+		{"1..5", []float64{1, 2, 3, 4, 5}, math.Sqrt(2)},
+		{"negatives", []float64{-2, -1, 0, 1, 2}, math.Sqrt(2)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := StdDev(tc.input)
+			if !almostEqual(got, tc.want) {
+				t.Fatalf("StdDev(%v) = %f, want %f", tc.input, got, tc.want)
+			}
+		})
+	}
 }

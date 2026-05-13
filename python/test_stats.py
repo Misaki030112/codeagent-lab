@@ -14,6 +14,8 @@ from stats import (
     median,
     parse_csv,
     percent_change,
+    std_dev,
+    variance,
 )
 
 
@@ -86,6 +88,52 @@ class TestPercentChange(unittest.TestCase):
         self.assertAlmostEqual(percent_change(-100, -50), 50.0)
 
 
+class TestVariance(unittest.TestCase):
+    def test_empty(self):
+        self.assertEqual(variance([]), 0)
+
+    def test_single(self):
+        self.assertEqual(variance([5]), 0)
+
+    def test_identical(self):
+        self.assertAlmostEqual(variance([3, 3, 3]), 0)
+
+    def test_two_values(self):
+        self.assertAlmostEqual(variance([2, 4]), 1.0)
+
+    def test_1_to_5(self):
+        self.assertAlmostEqual(variance([1, 2, 3, 4, 5]), 2.0)
+
+    def test_negatives(self):
+        self.assertAlmostEqual(variance([-2, -1, 0, 1, 2]), 2.0)
+
+    def test_generator(self):
+        self.assertAlmostEqual(variance(x for x in [1, 2, 3, 4, 5]), 2.0)
+
+
+class TestStdDev(unittest.TestCase):
+    def test_empty(self):
+        self.assertEqual(std_dev([]), 0)
+
+    def test_single(self):
+        self.assertEqual(std_dev([42]), 0)
+
+    def test_identical(self):
+        self.assertAlmostEqual(std_dev([7, 7, 7, 7]), 0)
+
+    def test_two_values(self):
+        self.assertAlmostEqual(std_dev([2, 4]), 1.0)
+
+    def test_1_to_5(self):
+        self.assertAlmostEqual(std_dev([1, 2, 3, 4, 5]), 2.0 ** 0.5)
+
+    def test_negatives(self):
+        self.assertAlmostEqual(std_dev([-2, -1, 0, 1, 2]), 2.0 ** 0.5)
+
+    def test_generator(self):
+        self.assertAlmostEqual(std_dev(x for x in [1, 2, 3, 4, 5]), 2.0 ** 0.5)
+
+
 class TestBuildSummary(unittest.TestCase):
     def test_empty(self):
         s = build_summary([])
@@ -118,7 +166,7 @@ class TestBuildSummary(unittest.TestCase):
 
     def test_keys_present(self):
         s = build_summary([1, 2, 3])
-        for key in ("count", "sum", "min", "max", "average", "median"):
+        for key in ("count", "sum", "min", "max", "average", "median", "variance", "std_dev"):
             self.assertIn(key, s)
 
     def test_generator_input(self):
