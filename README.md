@@ -98,6 +98,34 @@ Output (JSON):
 | `buildSummaryAnchor(section, label)` | HTML anchor for summary navigation | `("revenue", "Rev")` → `<a href="#revenue">Rev</a>` |
 | `truncateMiddle(input, max)` | Ellipsis in the middle | `("abcdefghij", 7)` → `"ab...ij"` |
 
+#### `slugify` — boundary behaviour
+
+| Input | Output | Notes |
+|-------|--------|-------|
+| `"Hello  World"` | `"hello-world"` | Consecutive spaces collapsed to one dash |
+| `"hello__world"` | `"hello-world"` | Consecutive underscores → single dash |
+| `"hello...world"` | `"helloworld"` | Punctuation removed (no separator inserted) |
+| `"  --leading-- "` | `"leading"` | Leading/trailing dashes and spaces stripped |
+| `"Hello_World!"` | `"hello-world"` | Underscore → dash, punctuation removed |
+
+#### `formatMetricLabel` — boundary behaviour
+
+| Input | Output | Notes |
+|-------|--------|-------|
+| `"total_revenue"` | `"Total Revenue"` | `snake_case` split on underscore |
+| `"avgSessionTime"` | `"Avg Session Time"` | `camelCase` split before each uppercase letter |
+| `"totalRevenue"` | `"Total Revenue"` | Single camelCase boundary |
+| `"avg_sessionTime"` | `"Avg Session Time"` | Mixed snake + camel both handled |
+
+#### `truncateMiddle` — boundary behaviour
+
+| Call | Output | Notes |
+|------|--------|-------|
+| `truncateMiddle("short", 10)` | `"short"` | `input.length <= max` → returned unchanged |
+| `truncateMiddle("abcd", 4)` | `"abcd"` | Exact length match → returned unchanged |
+| `truncateMiddle("abcde", 3)` | `"a..."` | `max < 4` clamped to `4`; `back = 0` so no trailing chars |
+| `truncateMiddle("abcdefghij", 7)` | `"ab...ij"` | Normal case: 2 front + `...` + 2 back |
+
 ## API summary
 
 ### Go (`package calc`)
