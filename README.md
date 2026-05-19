@@ -56,7 +56,8 @@ Output (JSON):
   "min": 1,
   "max": 5,
   "average": 3.0,
-  "median": 3
+  "median": 3,
+  "span": 4
 }
 ```
 
@@ -80,7 +81,8 @@ Output (JSON):
         "min": 10.0,
         "max": 20.0,
         "average": 15.0,
-        "median": 15.0
+        "median": 15.0,
+        "span": 10.0
       }
     }
   ]
@@ -143,4 +145,20 @@ timestamp,value
 | Out-of-order input | Sorted by timestamp before grouping |
 | Empty windows | Not emitted — only windows containing events appear in output |
 | Invalid rows | Skipped with warnings; valid rows are still processed |
-| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median` |
+| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median`/`span` |
+
+### Summary schema fields
+
+| Field | Formula / Definition | Empty-input default |
+|-------|----------------------|---------------------|
+| `count` | Number of samples | `0` |
+| `sum` | Sum of all values | `0` |
+| `min` | Smallest value | `0` — default, not a real sample |
+| `max` | Largest value | `0` — default, not a real sample |
+| `average` | `sum / count` | `0` |
+| `median` | Middle value (sorted) | `0` |
+| `span` | `max - min` | `0` — default, not a real sample range |
+
+> **Note:** For an empty input (no samples), `min`, `max`, and `span` are all `0` as sentinel
+> defaults, **not** meaningful statistics. A `span` of `0` on a non-empty input means all values
+> are identical.

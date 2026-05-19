@@ -52,7 +52,7 @@ def percent_change(prev: float, current: float) -> float:
 
 
 def build_summary(values: Iterable[float]) -> dict:
-    """Return a dict with count, sum, min, max, average, and median."""
+    """Return a dict with count, sum, min, max, average, median, and span."""
     items = list(values)
     if not items:
         return {
@@ -62,14 +62,18 @@ def build_summary(values: Iterable[float]) -> dict:
             "max": 0,
             "average": 0,
             "median": 0,
+            "span": 0,
         }
+    lo = min(items)
+    hi = max(items)
     return {
         "count": len(items),
         "sum": sum(items),
-        "min": min(items),
-        "max": max(items),
+        "min": lo,
+        "max": hi,
         "average": average(items),
         "median": median(items),
+        "span": hi - lo,
     }
 
 
