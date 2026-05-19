@@ -4,7 +4,7 @@ Cross-language analytics summary toolkit — a lab repository for CodeAgent inte
 
 ## Overview
 
-This repository implements a small but realistic analytics toolkit across three languages, sharing a unified **summary** schema (`count`, `sum`, `min`, `max`, `average`, `median`). It is designed to exercise multi-file, cross-language planning, code generation, and review workflows.
+This repository implements a small but realistic analytics toolkit across three languages, sharing a unified **summary** schema (`count`, `sum`, `min`, `max`, `average`, `median`, `range`). It is designed to exercise multi-file, cross-language planning, code generation, and review workflows.
 
 ## Layout
 
@@ -56,7 +56,8 @@ Output (JSON):
   "min": 1,
   "max": 5,
   "average": 3.0,
-  "median": 3
+  "median": 3,
+  "range": 4
 }
 ```
 
@@ -80,7 +81,8 @@ Output (JSON):
         "min": 10.0,
         "max": 20.0,
         "average": 15.0,
-        "median": 15.0
+        "median": 15.0,
+        "range": 10.0
       }
     }
   ]
@@ -143,4 +145,4 @@ timestamp,value
 | Out-of-order input | Sorted by timestamp before grouping |
 | Empty windows | Not emitted — only windows containing events appear in output |
 | Invalid rows | Skipped with warnings; valid rows are still processed |
-| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median` |
+| Shared schema | `window_start`, `window_end`, `summary` with `count`/`sum`/`min`/`max`/`average`/`median`/`range` |
