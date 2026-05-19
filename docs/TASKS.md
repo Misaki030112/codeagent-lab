@@ -70,7 +70,8 @@ Expected JSON output:
   "min": 10.0,
   "max": 30.0,
   "average": 20.0,
-  "median": 20.0
+  "median": 20.0,
+  "span": 20.0
 }
 ```
 
@@ -97,12 +98,12 @@ Expected JSON output:
     {
       "window_start": "2026-04-01T10:00:00Z",
       "window_end": "2026-04-01T10:05:00Z",
-      "summary": { "count": 2, "sum": 30.0, "min": 10.0, "max": 20.0, "average": 15.0, "median": 15.0 }
+      "summary": { "count": 2, "sum": 30.0, "min": 10.0, "max": 20.0, "average": 15.0, "median": 15.0, "span": 10.0 }
     },
     {
       "window_start": "2026-04-01T10:05:00Z",
       "window_end": "2026-04-01T10:10:00Z",
-      "summary": { "count": 1, "sum": 30.0, "min": 30.0, "max": 30.0, "average": 30.0, "median": 30.0 }
+      "summary": { "count": 1, "sum": 30.0, "min": 30.0, "max": 30.0, "average": 30.0, "median": 30.0, "span": 0.0 }
     }
   ]
 }
