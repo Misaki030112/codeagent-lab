@@ -177,14 +177,14 @@ func TestPercentChangeNoChange(t *testing.T) {
 
 func TestBuildSummaryEmpty(t *testing.T) {
 	s := BuildSummary(nil)
-	if s.Count != 0 || s.Sum != 0 || s.Min != 0 || s.Max != 0 || s.Average != 0 || s.Median != 0 {
+	if s.Count != 0 || s.Sum != 0 || s.Min != 0 || s.Max != 0 || s.Average != 0 || s.Median != 0 || s.Span != 0 {
 		t.Fatalf("BuildSummary(nil) = %+v, want zero", s)
 	}
 }
 
 func TestBuildSummarySingle(t *testing.T) {
 	s := BuildSummary([]float64{10})
-	if s.Count != 1 || s.Sum != 10 || s.Min != 10 || s.Max != 10 || s.Average != 10 || s.Median != 10 {
+	if s.Count != 1 || s.Sum != 10 || s.Min != 10 || s.Max != 10 || s.Average != 10 || s.Median != 10 || s.Span != 0 {
 		t.Fatalf("BuildSummary([10]) = %+v", s)
 	}
 }
@@ -209,6 +209,9 @@ func TestBuildSummaryMultiple(t *testing.T) {
 	if s.Median != 3 {
 		t.Fatalf("Median = %f, want 3", s.Median)
 	}
+	if s.Span != 4 {
+		t.Fatalf("Span = %f, want 4", s.Span)
+	}
 }
 
 func TestBuildSummaryNegatives(t *testing.T) {
@@ -222,11 +225,21 @@ func TestBuildSummaryNegatives(t *testing.T) {
 	if s.Average != 0 {
 		t.Fatalf("Average = %f, want 0", s.Average)
 	}
+	if s.Span != 20 {
+		t.Fatalf("Span = %f, want 20", s.Span)
+	}
 }
 
 func TestBuildSummaryDuplicates(t *testing.T) {
 	s := BuildSummary([]float64{7, 7, 7})
-	if s.Min != 7 || s.Max != 7 || s.Average != 7 || s.Median != 7 {
+	if s.Min != 7 || s.Max != 7 || s.Average != 7 || s.Median != 7 || s.Span != 0 {
 		t.Fatalf("BuildSummary([7,7,7]) = %+v", s)
+	}
+}
+
+func TestBuildSummarySpan(t *testing.T) {
+	s := BuildSummary([]float64{3, 8, 1, 6})
+	if s.Span != 7 {
+		t.Fatalf("Span = %f, want 7", s.Span)
 	}
 }

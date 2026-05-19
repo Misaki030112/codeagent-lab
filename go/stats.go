@@ -14,6 +14,7 @@ type Summary struct {
 	Max     float64 `json:"max"`
 	Average float64 `json:"average"`
 	Median  float64 `json:"median"`
+	Span    float64 `json:"span"`
 }
 
 // Sum returns the sum of all values. Returns 0 for an empty slice.
@@ -85,5 +86,6 @@ func BuildSummary(values []float64) Summary {
 		}
 	}
 
+	s.Span = s.Max - s.Min
 	return s
 }
