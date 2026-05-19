@@ -120,11 +120,34 @@ Expected: JSON output matching the same window schema as the Python CLI.
 
 ### TypeScript — spot-check examples
 
-| Expression | Expected output |
-|---|---|
-| `slugify("Hello__World!! ")` | `"hello-world"` |
-| `slugify("  --leading-- ")` | `"leading"` |
-| `formatMetricLabel("avg_session_time")` | `"Avg Session Time"` |
-| `formatMetricLabel("avgSessionTime")` | `"Avg Session Time"` |
-| `truncateMiddle("abcdefghij", 7)` | `"ab...ij"` |
-| `truncateMiddle("short", 10)` | `"short"` |
+#### `slugify`
+
+| Expression | Expected output | What is being checked |
+|---|---|---|
+| `slugify("Hello World!")` | `"hello-world"` | Basic lowercase + punctuation removal |
+| `slugify("Hello  World")` | `"hello-world"` | Consecutive spaces collapsed to one dash |
+| `slugify("hello__world")` | `"hello-world"` | Consecutive underscores → single dash |
+| `slugify("Hello__World!! ")` | `"hello-world"` | Combined: double underscore + punctuation + trailing space |
+| `slugify("hello...world")` | `"helloworld"` | Punctuation removed without inserting a separator |
+| `slugify("  --leading-- ")` | `"leading"` | Leading/trailing dashes and spaces stripped |
+| `slugify("_hello_")` | `"hello"` | Leading/trailing underscores (→ dashes) stripped |
+
+#### `formatMetricLabel`
+
+| Expression | Expected output | What is being checked |
+|---|---|---|
+| `formatMetricLabel("total_revenue")` | `"Total Revenue"` | `snake_case` split on underscore |
+| `formatMetricLabel("avg_session_time")` | `"Avg Session Time"` | Multiple underscores |
+| `formatMetricLabel("avgSessionTime")` | `"Avg Session Time"` | `camelCase` split before each uppercase letter |
+| `formatMetricLabel("totalRevenue")` | `"Total Revenue"` | Single camelCase boundary |
+| `formatMetricLabel("avg_sessionTime")` | `"Avg Session Time"` | Mixed `snake_case` + `camelCase` |
+
+#### `truncateMiddle`
+
+| Expression | Expected output | What is being checked |
+|---|---|---|
+| `truncateMiddle("abcdefghij", 7)` | `"ab...ij"` | Normal truncation: 2 front + `...` + 2 back |
+| `truncateMiddle("short", 10)` | `"short"` | `input.length <= max` → returned unchanged |
+| `truncateMiddle("abcd", 4)` | `"abcd"` | Exact length match → returned unchanged |
+| `truncateMiddle("abcde", 3)` | `"a..."` | `max < 4` clamped to `4`; `back = 0` so no trailing chars |
+| `truncateMiddle("abcde", 4)` | `"a..."` | Minimum valid `max`; single front char + `...` |
