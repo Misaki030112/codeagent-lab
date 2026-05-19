@@ -229,4 +229,56 @@ func TestBuildSummaryDuplicates(t *testing.T) {
 	if s.Min != 7 || s.Max != 7 || s.Average != 7 || s.Median != 7 {
 		t.Fatalf("BuildSummary([7,7,7]) = %+v", s)
 	}
+	if s.Variance != 0 {
+		t.Fatalf("Variance([7,7,7]) = %f, want 0", s.Variance)
+	}
+	if s.StdDev != 0 {
+		t.Fatalf("StdDev([7,7,7]) = %f, want 0", s.StdDev)
+	}
+}
+
+// --- Variance ---
+
+func TestVariance(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  []float64
+		wantV  float64
+		wantSD float64
+	}{
+		{"empty", nil, 0, 0},
+		{"single", []float64{5}, 0, 0},
+		{"two equal", []float64{3, 3}, 0, 0},
+		{"two different", []float64{2, 4}, 1, 1},
+		{"positive integers", []float64{2, 4, 4, 4, 5, 5, 7, 9}, 4, 2},
+		{"negatives", []float64{-3, -1, 1, 3}, 5, math.Sqrt(5)},
+		{"all same", []float64{10, 10, 10, 10}, 0, 0},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Variance(tc.input); !almostEqual(got, tc.wantV) {
+				t.Errorf("Variance(%v) = %f, want %f", tc.input, got, tc.wantV)
+			}
+			if got := StdDev(tc.input); !almostEqual(got, tc.wantSD) {
+				t.Errorf("StdDev(%v) = %f, want %f", tc.input, got, tc.wantSD)
+			}
+		})
+	}
+}
+
+func TestBuildSummaryIncludesVarianceAndStdDev(t *testing.T) {
+	s := BuildSummary([]float64{2, 4, 4, 4, 5, 5, 7, 9})
+	if !almostEqual(s.Variance, 4) {
+		t.Fatalf("Variance = %f, want 4", s.Variance)
+	}
+	if !almostEqual(s.StdDev, 2) {
+		t.Fatalf("StdDev = %f, want 2", s.StdDev)
+	}
+}
+
+func TestBuildSummaryEmptyVariance(t *testing.T) {
+	s := BuildSummary(nil)
+	if s.Variance != 0 || s.StdDev != 0 {
+		t.Fatalf("BuildSummary(nil) variance/stddev not zero: %+v", s)
+	}
 }

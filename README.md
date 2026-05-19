@@ -4,7 +4,7 @@ Cross-language analytics summary toolkit — a lab repository for CodeAgent inte
 
 ## Overview
 
-This repository implements a small but realistic analytics toolkit across three languages, sharing a unified **summary** schema (`count`, `sum`, `min`, `max`, `average`, `median`). It is designed to exercise multi-file, cross-language planning, code generation, and review workflows.
+This repository implements a small but realistic analytics toolkit across three languages, sharing a unified **summary** schema (`count`, `sum`, `min`, `max`, `average`, `median`, `variance`, `std_dev`). It is designed to exercise multi-file, cross-language planning, code generation, and review workflows.
 
 ## Layout
 
@@ -56,7 +56,9 @@ Output (JSON):
   "min": 1,
   "max": 5,
   "average": 3.0,
-  "median": 3
+  "median": 3,
+  "variance": 2.0,
+  "std_dev": 1.4142135623730951
 }
 ```
 
@@ -80,7 +82,9 @@ Output (JSON):
         "min": 10.0,
         "max": 20.0,
         "average": 15.0,
-        "median": 15.0
+        "median": 15.0,
+        "variance": 25.0,
+        "std_dev": 5.0
       }
     }
   ]
@@ -107,6 +111,8 @@ Output (JSON):
 - `Sum(values []float64) float64`
 - `Average(values []float64) float64`
 - `Median(values []float64) float64`
+- `Variance(values []float64) float64`
+- `StdDev(values []float64) float64`
 - `PercentChange(prev, current float64) (float64, error)`
 - `BuildSummary(values []float64) Summary`
 - `ParseCSV(r io.Reader) ([]Event, []error)` — parse `timestamp,value` CSV
@@ -117,6 +123,8 @@ Output (JSON):
 
 - `average(values)` → `float`
 - `median(values)` → `float`
+- `variance(values)` → `float`
+- `std_dev(values)` → `float`
 - `percent_change(prev, current)` → `float`
 - `build_summary(values)` → `dict`
 - `parse_csv(filepath)` → `list[tuple[datetime, float]]`

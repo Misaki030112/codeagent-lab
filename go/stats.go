@@ -8,12 +8,14 @@ import (
 
 // Summary holds descriptive statistics for a slice of float64 values.
 type Summary struct {
-	Count   int     `json:"count"`
-	Sum     float64 `json:"sum"`
-	Min     float64 `json:"min"`
-	Max     float64 `json:"max"`
-	Average float64 `json:"average"`
-	Median  float64 `json:"median"`
+	Count    int     `json:"count"`
+	Sum      float64 `json:"sum"`
+	Min      float64 `json:"min"`
+	Max      float64 `json:"max"`
+	Average  float64 `json:"average"`
+	Median   float64 `json:"median"`
+	Variance float64 `json:"variance"`
+	StdDev   float64 `json:"std_dev"`
 }
 
 // Sum returns the sum of all values. Returns 0 for an empty slice.
@@ -59,6 +61,26 @@ func PercentChange(prev, current float64) (float64, error) {
 	return ((current - prev) / math.Abs(prev)) * 100, nil
 }
 
+// Variance returns the population variance of values. Returns 0 for empty or single-element slices.
+func Variance(values []float64) float64 {
+	n := len(values)
+	if n < 2 {
+		return 0
+	}
+	mean := Average(values)
+	var sumSq float64
+	for _, v := range values {
+		d := v - mean
+		sumSq += d * d
+	}
+	return sumSq / float64(n)
+}
+
+// StdDev returns the population standard deviation of values. Returns 0 for empty or single-element slices.
+func StdDev(values []float64) float64 {
+	return math.Sqrt(Variance(values))
+}
+
 // BuildSummary computes descriptive statistics for the given values.
 // Returns a zero-value Summary for an empty slice.
 func BuildSummary(values []float64) Summary {
@@ -68,12 +90,14 @@ func BuildSummary(values []float64) Summary {
 	}
 
 	s := Summary{
-		Count:   n,
-		Sum:     Sum(values),
-		Average: Average(values),
-		Median:  Median(values),
-		Min:     values[0],
-		Max:     values[0],
+		Count:    n,
+		Sum:      Sum(values),
+		Average:  Average(values),
+		Median:   Median(values),
+		Min:      values[0],
+		Max:      values[0],
+		Variance: Variance(values),
+		StdDev:   StdDev(values),
 	}
 
 	for _, v := range values[1:] {
