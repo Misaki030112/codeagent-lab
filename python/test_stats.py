@@ -91,6 +91,7 @@ class TestBuildSummary(unittest.TestCase):
         s = build_summary([])
         self.assertEqual(s["count"], 0)
         self.assertEqual(s["sum"], 0)
+        self.assertEqual(s["range"], 0)
 
     def test_single(self):
         s = build_summary([10])
@@ -100,6 +101,7 @@ class TestBuildSummary(unittest.TestCase):
         self.assertEqual(s["max"], 10)
         self.assertEqual(s["average"], 10)
         self.assertEqual(s["median"], 10)
+        self.assertEqual(s["range"], 0)
 
     def test_multiple(self):
         s = build_summary([1, 2, 3, 4, 5])
@@ -109,16 +111,18 @@ class TestBuildSummary(unittest.TestCase):
         self.assertEqual(s["max"], 5)
         self.assertAlmostEqual(s["average"], 3.0)
         self.assertEqual(s["median"], 3)
+        self.assertEqual(s["range"], 4)
 
     def test_negatives(self):
         s = build_summary([-10, -5, 0, 5, 10])
         self.assertEqual(s["min"], -10)
         self.assertEqual(s["max"], 10)
         self.assertAlmostEqual(s["average"], 0.0)
+        self.assertEqual(s["range"], 20)
 
     def test_keys_present(self):
         s = build_summary([1, 2, 3])
-        for key in ("count", "sum", "min", "max", "average", "median"):
+        for key in ("count", "sum", "min", "max", "average", "median", "range"):
             self.assertIn(key, s)
 
     def test_generator_input(self):
